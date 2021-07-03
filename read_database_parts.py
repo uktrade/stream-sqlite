@@ -1,3 +1,5 @@
+from io import BytesIO
+
 BYTEORDER = 'big'
 
 INTERIOR_INDEX = 2
@@ -11,7 +13,37 @@ def print_buffer(title, buffer, size):
     for i in range(0,size):
         print(f" byte {i} = {buffer[i]} {hex(buffer[i])} {chr(buffer[i])} ")
 
+def _read_one(stream):
+    """Read a byte from the file (as an integer)
+    raises EOFError if the stream ends while reading bytes.
+    """
+    c = stream.read(1)
+    if c == b'':
+        raise EOFError("Unexpected EOF while reading bytes")
+    return ord(c)
+
+def decode_stream(stream):
+    """Read a varint from `stream`"""
+    shift = 0
+    result = 0
+    while True:
+        i = _read_one(stream)
+        result |= (i & 0x7f) << shift
+        shift += 7
+        if not (i & 0x80):
+            break
+
+    return result
+
+def decode_bytes(buf):
+    """Read a varint from from `buf` bytes"""
+    return decode_stream(BytesIO(buf))
+
+
+
 def read_varint_from_buffer(buffer):
+    return decode_bytes(buffer)
+
     # https://sqlite.org/src4/doc/trunk/www/varint.wiki
     A0 = buffer.pop(0)
     if A0 <= 240:
@@ -33,6 +65,7 @@ def read_varint_from_buffer(buffer):
     return int(value)
 
 def read_varint_from_file(fptr):
+    return decode_stream(fptr)
     # https://sqlite.org/src4/doc/trunk/www/varint.wiki
     buffer = fptr.read(1)
     A0 = buffer[0]
@@ -96,7 +129,7 @@ def read_btree_leaf_from_file(fptr):
     header_size = read_varint_from_buffer(payload_buffer)
     column_size = []
     for i in range(0, header_size-1):
-        a = read_varint_from_buffer(payload_buffer)
+        a = read_varint_from_buffer(payload_buffer[i:])
         print(f"Read a = {a}")
         if a > 12 and a % 2:
             #     string
