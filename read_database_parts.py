@@ -123,9 +123,9 @@ def read_btree_internal_table(fptr, cell_index):
 def read_btree_leaf_from_file(fptr):
     # print("==================================")
     payload_size = decode_stream(fptr)
-    print("========== READ key ==========")
-    key = decode_stream(fptr, True)
-    print(f"========== key = {key} ==========")
+    # print("========== READ key ==========")
+    key = decode_stream(fptr)
+    # print(f"========== key = {key} ==========")
 
     # print(f"payload_size = {payload_size}, key = {key}")
     header_start = fptr.tell()
@@ -177,13 +177,13 @@ def read_page_from_block(fptr, database_info):
     number_of_cells, \
     right_most_pointer \
         = read_page_header(fptr)
-    print(f"page_type = {page_type}")
+    # print(f"page_type = {page_type}")
     # print(f"content_start = {content_start}")
-    print(f"number_of_cells = {number_of_cells}")
+    # print(f"number_of_cells = {number_of_cells}")
     # print(f"right_most_pointer = {right_most_pointer}")
     cell_index = read_cell_index_from_page(fptr, number_of_cells)
-    print(f"Cells addresses {cell_index}")
-    print(f"after reading {fptr.tell()}")
+    # print(f"Cells addresses {cell_index}")
+    # print(f"after reading {fptr.tell()}")
     if page_type == LEAF_TABLE:
         for cell_start in cell_index:
             fptr.seek(cell_start)
@@ -194,10 +194,10 @@ def read_page_from_block(fptr, database_info):
         print(f"after page {fptr.tell()}")
         page_index = read_btree_internal_table(fptr, cell_index)
         print (f"page_index = {page_index}")
-        # for page in page_index:
-        #     page_buffer = database_info.get_page(page)
-        #     print(f"====== Reading page {page}")
-        #     read_page_from_block(page_buffer, database_info)
+        for page in page_index:
+            page_buffer = database_info.get_page(page)
+            # print(f"====== Reading page {page}")
+            read_page_from_block(page_buffer, database_info)
 
         if right_most_pointer:
             page_buffer = database_info.get_page(right_most_pointer)
