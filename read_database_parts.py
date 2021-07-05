@@ -40,7 +40,6 @@ def decode_stream(stream):
         shift += 7
         if not (i & 0x80):
             break
-
     return int(result)
 
 
@@ -90,39 +89,38 @@ def read_btree_leaf_from_file(fptr):
     print("==================================")
     payload_size = read_varint_from_file(fptr)
     key = read_varint_from_file(fptr)
-    print(f"payload_size = {payload_size}, key = {key}")
+    # print(f"payload_size = {payload_size}, key = {key}")
 
     buffer = fptr.read(payload_size)
-    print(f"Record {key}, {buffer}")
+    # print(f"Record {key}, {buffer}")
     payload_stream = BytesIO(buffer)
     header_size = decode_stream(payload_stream)
-    column_size = []
-    for _ in range(1, header_size-1):
+
+    start_data = int(header_size)
+    # print_buffer("Header", buffer, header_size+1)
+    size_so_far = start_data
+    row_list = []
+    col_size = 0
+    while start_data < payload_size :
         a = decode_stream(payload_stream)
         if a > 12 and a % 2:
-            #     string
-            column_size.append((a-13)/2)
+             #     Text
+            col_size = (a-13)/2
+            size_so_far = int(size_so_far + col_size)
+            column = buffer[start_data:size_so_far]
         elif a > 11 and (a % 2) == 0:
-            #     string
-            column_size.append((a-12)/2)
+            #     String
+            col_size=(a-12)/2
+            size_so_far = int(size_so_far + col_size)
+            column = str(buffer[start_data:size_so_far])
         else:
-            column_size.append(a)
-    start = 0
-    print(f"header_size = {header_size}")
-    row_list = []
-    for size in column_size:
-        column = payload_stream.read(int(size))
+            col_size = a
+            size_so_far = int(size_so_far + col_size)
+            column = convert_bytes_to_int(buffer[start_data:size_so_far], 0, a)
         row_list.append(column)
-        print(f"size = {size} start = {start} column = {column}")
-        start += size
+        start_data = int(start_data + col_size)
 
     return row_list
-    # print(f"column sizes = {column_size}")
-    # print(payload_stream)
-
-    # buffer = fptr.read(payload_size)
-    # print_buffer("cell leaf", buffer, payload_size)
-    # print(buffer)
 
 
 def read_schema_cell(fptr):
