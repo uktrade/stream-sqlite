@@ -31,5 +31,5 @@ def test_database_routines(name):
         fptr.read(content_start-currpos)
         print(f"after page {fptr.tell()}")
         for i in range(0,number_of_cells):
-            read_btree_leaf_from_file(fptr)
-        read_btree_leaf_from_file(fptr)
+            row_list = read_btree_leaf_from_file(fptr)
+            print(row_list)

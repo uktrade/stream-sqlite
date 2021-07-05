@@ -7,6 +7,14 @@ INTERIOR_TABLE = 5
 LEAF_INDEX = 10
 LEAF_TABLE = 13
 
+SQLITE_SCHEMA_COLUMNS = {
+    "type": "text",
+    "name": "text",
+    "tbl_name": "text",
+    "rootpage": "integer",
+    "sql_text": "text",
+}
+
 
 def print_buffer(title, buffer, size):
     print(title)
@@ -33,16 +41,7 @@ def decode_stream(stream):
         if not (i & 0x80):
             break
 
-    return result
-
-def decode_bytes(buf):
-    """Read a varint from from `buf` bytes"""
-    return decode_stream(BytesIO(buf))
-
-
-
-def read_varint_from_buffer(buffer):
-    return decode_bytes(buffer)
+    return int(result)
 
 
 def read_varint_from_file(fptr):
@@ -77,27 +76,29 @@ def read_page_header_from_file(fptr):
     schema_format = convert_bytes_to_int(buffer, 44, 4)
     return page_type, content_start, number_of_cells, right_most_pointer, schema_format
 
+
 def read_cell_index_from_file(fptr, howmany_cells):
-    cells = []
+    cell_index = []
     # 2 bytes for offsets
     buffer = fptr.read(howmany_cells * 2)
     for cell_ptr in range (0, howmany_cells):
-            cells.append(convert_bytes_to_int(buffer, cell_ptr*2, 2))
-    return cells
+            cell_index.append(convert_bytes_to_int(buffer, cell_ptr*2, 2))
+    return cell_index
+
 
 def read_btree_leaf_from_file(fptr):
+    print("==================================")
     payload_size = read_varint_from_file(fptr)
     key = read_varint_from_file(fptr)
     print(f"payload_size = {payload_size}, key = {key}")
-    buffer = fptr.read(payload_size)
-    # print_buffer("payload_buffer", buffer, payload_size)
-    payload_buffer = bytearray(buffer)
 
-    header_size = read_varint_from_buffer(payload_buffer)
+    buffer = fptr.read(payload_size)
+    print(f"Record {key}, {buffer}")
+    payload_stream = BytesIO(buffer)
+    header_size = decode_stream(payload_stream)
     column_size = []
-    for i in range(0, header_size-1):
-        a = read_varint_from_buffer(payload_buffer[i:])
-        print(f"Read a = {a}")
+    for _ in range(1, header_size-1):
+        a = decode_stream(payload_stream)
         if a > 12 and a % 2:
             #     string
             column_size.append((a-13)/2)
@@ -108,32 +109,21 @@ def read_btree_leaf_from_file(fptr):
             column_size.append(a)
     start = 0
     print(f"header_size = {header_size}")
+    row_list = []
     for size in column_size:
-        column = payload_buffer[int(start):int(start+size)]
+        column = payload_stream.read(int(size))
+        row_list.append(column)
         print(f"size = {size} start = {start} column = {column}")
         start += size
 
+    return row_list
     # print(f"column sizes = {column_size}")
-    print(payload_buffer)
-    # header_size = read_varint_from_file(fptr)
-    # print(f"Header size = {header_size}")
-    #
-    # column_size = []
-    # for i in range(0, header_size-1):
-    #     a = read_varint_from_file(fptr)
-    #     if a > 12 and a % 2:
-    #         #     string
-    #         column_size.append((a-13)/2)
-    #     elif a > 11 and (a % 2) == 0:
-    #         #     string
-    #         column_size.append((a-12)/2)
-    #     else:
-    #         column_size.append(a)
-    #
-    # print(f"column sizes = {column_size}")
-    # header_buffer = fptr.read(header_size - 1)
-    # print_buffer("Header", header_buffer, header_size - 1)
+    # print(payload_stream)
 
     # buffer = fptr.read(payload_size)
     # print_buffer("cell leaf", buffer, payload_size)
     # print(buffer)
+
+
+def read_schema_cell(fptr):
+    return read_btree_leaf_from_file(SQLITE_SCHEMA_COLUMNS, fptr)
