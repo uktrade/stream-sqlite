@@ -7,6 +7,6 @@ from read_sqlite import test_database_routines
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    # test_database_routines('/Users/stronal/PycharmProjects/sqlite_experiments/DIT210023.sqlite')
-    test_database_routines('/Users/stronal/PycharmProjects/sqlite_experiments/test.db')
+    test_database_routines('/Users/stronal/PycharmProjects/sqlite_experiments/DIT210023.sqlite')
+    # test_database_routines('/Users/stronal/PycharmProjects/sqlite_experiments/test.db')
 

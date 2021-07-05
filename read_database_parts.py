@@ -85,6 +85,24 @@ def read_cell_index_from_file(fptr, howmany_cells):
     return cell_index
 
 
+
+def read_cell_index(fptr):
+    buffer = fptr.read(4)
+    left_child_pointer = convert_bytes_to_int(buffer, 0, 4)
+    key =  read_varint_from_file(fptr)
+    return left_child_pointer, key
+
+def read_btree_internal_table(fptr, cell_index):
+    # A 4-byte big-endian page number which is the left child pointer.
+    # A varint which is the integer key
+    for start in cell_index:
+        fptr.seek(start)
+        print(fptr.tell())
+        left_child_pointer, key = read_cell_index(fptr)
+        print(f"left_child_pointer = {left_child_pointer}, key = {key}")
+
+
+
 def read_btree_leaf_from_file(fptr):
     print("==================================")
     payload_size = read_varint_from_file(fptr)
