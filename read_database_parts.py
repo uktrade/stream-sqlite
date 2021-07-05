@@ -44,50 +44,10 @@ def decode_bytes(buf):
 def read_varint_from_buffer(buffer):
     return decode_bytes(buffer)
 
-    # https://sqlite.org/src4/doc/trunk/www/varint.wiki
-    A0 = buffer.pop(0)
-    if A0 <= 240:
-        value = A0
-    elif (A0 > 240 and A0 < 249):
-        A1 = buffer.pop(0)
-        value = 240 + 256 * (A0 - 251) + A1
-    elif A0 == 249:
-        A1 = buffer.pop(0)
-        A2 = buffer.pop(0)
-        value = 2288 + 256 * A1 + A2
-    # elif A0 >= 250:
-    #     value_size = 3 + A0 - 250
-    #     buffer = fptr.read(value_size)
-    #     value = int.from_bytes(buffer[0: value_size], byteorder=BYTEORDER)
-    else:
-        raise Exception("Invalid varint size")
-
-    return int(value)
 
 def read_varint_from_file(fptr):
     return decode_stream(fptr)
-    # https://sqlite.org/src4/doc/trunk/www/varint.wiki
-    buffer = fptr.read(1)
-    A0 = buffer[0]
-    if A0 <= 240:
-        value = A0
-    elif (A0 > 240 and A0 < 249):
-        buffer = fptr.read(1)
-        A1 = buffer[0]
-        value = 240 + 256 * (A0 - 251) + A1
-    elif A0 == 249:
-        buffer = fptr.read(2)
-        A1 = buffer[0]
-        A2 = buffer[1]
-        value = 2288 + 256 * A1 + A2
-    elif A0 >= 250:
-        value_size = 3 + A0 - 250
-        buffer = fptr.read(value_size)
-        value = int.from_bytes(buffer[0: value_size], byteorder=BYTEORDER)
-    else:
-        raise Exception("Invalid varint size")
 
-    return value
 
 def convert_bytes_to_int(byte_array, start, size):
     return int.from_bytes(byte_array[start:start+size], byteorder=BYTEORDER)
@@ -117,6 +77,13 @@ def read_page_header_from_file(fptr):
     schema_format = convert_bytes_to_int(buffer, 44, 4)
     return page_type, content_start, number_of_cells, right_most_pointer, schema_format
 
+def read_cell_index_from_file(fptr, howmany_cells):
+    cells = []
+    # 2 bytes for offsets
+    buffer = fptr.read(howmany_cells * 2)
+    for cell_ptr in range (0, howmany_cells):
+            cells.append(convert_bytes_to_int(buffer, cell_ptr*2, 2))
+    return cells
 
 def read_btree_leaf_from_file(fptr):
     payload_size = read_varint_from_file(fptr)
