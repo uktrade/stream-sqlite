@@ -1,6 +1,6 @@
 import io
 
-BYTEORDER = 'big'
+BYTEORDER = "big"
 
 INTERIOR_INDEX = 2
 INTERIOR_TABLE = 5
@@ -18,11 +18,11 @@ SQLITE_SCHEMA_COLUMNS = {
 }
 
 
-class DatabaseHandler():
+class DatabaseHandler:
     def __init__(self, path):
         self.db_path = path
-        
-    def get_page(self,page_number):
+
+    def get_page(self, page_number):
         with open(self.db_path, "rb") as fptr:
             database_pointer = fptr
             database_pointer.seek((page_number - 1) * PAGE_SIZE)
@@ -33,7 +33,7 @@ class DatabaseHandler():
 
 def print_buffer(title, buffer, size):
     print(title)
-    for i in range(0,size):
+    for i in range(0, size):
         print(f" byte {i} = {buffer[i]} {hex(buffer[i])} {chr(buffer[i])} ")
 
 
@@ -42,9 +42,10 @@ def _read_one(stream):
     raises EOFError if the stream ends while reading bytes.
     """
     c = stream.read(1)
-    if c == b'':
+    if c == b"":
         raise EOFError("Unexpected EOF while reading bytes")
     return ord(c)
+
 
 def decode_stream(stream, show_bite=False):
     """Read a varint from `stream`"""
@@ -55,7 +56,7 @@ def decode_stream(stream, show_bite=False):
         i = _read_one(stream)
         if show_bite:
             print(f"byte = {i} {hex(i)}")
-        result = ((result & 0x7f) << shift) + (i & 0x7f)
+        result = ((result & 0x7F) << shift) + (i & 0x7F)
         if show_bite:
             print(f"result = {result} {hex(result)}, shift = {shift}")
         # shift += 7
@@ -64,9 +65,8 @@ def decode_stream(stream, show_bite=False):
     return int(result)
 
 
-
 def convert_bytes_to_int(byte_array, start, size):
-    return int.from_bytes(byte_array[start:start+size], byteorder=BYTEORDER)
+    return int.from_bytes(byte_array[start:start + size], byteorder=BYTEORDER)
 
 
 # https://www.sqlite.org/fileformat.html
@@ -97,8 +97,8 @@ def read_cell_index_from_page(fptr, howmany_cells):
     cell_index = []
     # 2 bytes for offsets
     buffer = fptr.read(howmany_cells * 2)
-    for cell_ptr in range (0, howmany_cells):
-            cell_index.append(convert_bytes_to_int(buffer, cell_ptr*2, 2))
+    for cell_ptr in range(0, howmany_cells):
+        cell_index.append(convert_bytes_to_int(buffer, cell_ptr * 2, 2))
     return cell_index
 
 
@@ -122,11 +122,11 @@ def read_btree_internal_table(fptr, cell_index):
     return page_index
 
 
-
 def read_btree_leaf_from_file(fptr):
     # It reads a single database record
     # it does not handle record overflow
-    # no internal checks on size
+    # no internal checks on size:
+    # the sum of the decoded record sizes should much the payload value
     # print("==================================")
     payload_size = decode_stream(fptr)
     # print("========== READ key ==========")
@@ -140,14 +140,14 @@ def read_btree_leaf_from_file(fptr):
 
     data_start = header_start + header_size
     col_info = []
-    while fptr.tell() < data_start :
+    while fptr.tell() < data_start:
         a = decode_stream(fptr)
         if a > 12 and a % 2:
-            col_size = (a-13)/2
+            col_size = (a - 13) / 2
             type = "string"
         elif a > 11 and (a % 2) == 0:
             #     String
-            col_size=(a-12)/2
+            col_size = (a - 12) / 2
             type = "blob"
         else:
             col_size = a
@@ -173,6 +173,7 @@ def read_schema(path):
     read_database_header_from_file(page1)
     read_page_from_block(page1, database_info)
 
+
 def read_page(path, number):
     database_info = DatabaseHandler(path)
     page = database_info.get_page(number)
@@ -183,11 +184,8 @@ def read_page_from_block(fptr, database_info):
     # fptr is pointing at the beginning of the page
     # it uses recursions, not good for streaming, but it can be changed
     # easily to read just one page
-    page_type, \
-    content_start, \
-    number_of_cells, \
-    right_most_pointer \
-        = read_page_header(fptr)
+    page_type, content_start, number_of_cells, right_most_pointer = \
+        read_page_header(fptr)
     # print(f"page_type = {page_type}")
     # print(f"content_start = {content_start}")
     # print(f"number_of_cells = {number_of_cells}")
@@ -213,6 +211,3 @@ def read_page_from_block(fptr, database_info):
         if right_most_pointer:
             page_buffer = database_info.get_page(right_most_pointer)
             read_page_from_block(page_buffer, database_info)
-
-
-

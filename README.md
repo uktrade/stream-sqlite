@@ -12,6 +12,8 @@ TESTS
 Inefficient:
 use recursion to read a page
 several useless seek and read in the routines
+use hardcoded page size
+
 
 Wrong:
 reading of varint using more than 2 bytes (?)

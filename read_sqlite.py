@@ -4,7 +4,6 @@ from read_database_parts import (
 )
 
 
-
 def test_database_routines(name):
     read_schema(name)
     # read_page(name, 31)
