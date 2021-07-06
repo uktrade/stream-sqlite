@@ -49,7 +49,6 @@ def _read_one(stream):
 
 def decode_stream(stream, show_bite=False):
     """Read a varint from `stream`"""
-    shift = 0
     result = 0
     shift = 7
     while True:
@@ -59,7 +58,6 @@ def decode_stream(stream, show_bite=False):
         result = ((result & 0x7F) << shift) + (i & 0x7F)
         if show_bite:
             print(f"result = {result} {hex(result)}, shift = {shift}")
-        # shift += 7
         if not (i & 0x80):
             break
     return int(result)
@@ -70,7 +68,7 @@ def convert_bytes_to_int(byte_array, start, size):
 
 
 # https://www.sqlite.org/fileformat.html
-def read_database_header_from_file(fptr):
+def read_database_header(fptr):
     buffer = fptr.read(100)
     # print_buffer("Database header", buffer, 100)
     page_size = convert_bytes_to_int(buffer, 16, 2)
@@ -122,7 +120,7 @@ def read_btree_internal_table(fptr, cell_index):
     return page_index
 
 
-def read_btree_leaf_from_file(fptr):
+def read_btree_table_leaf(fptr):
     # It reads a single database record
     # it does not handle record overflow
     # no internal checks on size:
@@ -154,6 +152,8 @@ def read_btree_leaf_from_file(fptr):
             type = "int"
         col_info.append((col_size, type))
     total = header_size
+    # Always output the key. It correspond to the ROWID, and it is used as 
+    # primary key in certain cases. 
     row_data = [key]
     for size_type in col_info:
         size = int(size_type[0])
@@ -174,7 +174,7 @@ def read_schema(path):
     # database header
     database_info = DatabaseHandler(path)
     page1 = database_info.get_page(1)
-    read_database_header_from_file(page1)
+    read_database_header(page1)
     read_page_from_block(page1, database_info)
 
 
@@ -200,7 +200,7 @@ def read_page_from_block(fptr, database_info):
     if page_type == LEAF_TABLE:
         for cell_start in cell_index:
             fptr.seek(cell_start)
-            row_list = read_btree_leaf_from_file(fptr)
+            row_list = read_btree_table_leaf(fptr)
             print(row_list)
     if page_type == INTERIOR_TABLE:
         fptr.seek(0)
