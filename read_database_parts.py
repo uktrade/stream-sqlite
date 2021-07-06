@@ -158,7 +158,11 @@ def read_btree_leaf_from_file(fptr):
     for size_type in col_info:
         size = int(size_type[0])
         total += size
+        type = size_type[1]
         value = fptr.read(size)
+        if type == "int":
+            value = convert_bytes_to_int(value, 0, size)
+
         row_data.append(value)
     # print(f"data used = {total}")
     return row_data

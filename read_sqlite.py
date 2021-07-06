@@ -4,7 +4,8 @@ from read_database_parts import (
 )
 
 
-def test_database_routines(name):
-    read_schema(name)
-    # read_page(name, 31)
-    # read_page(name, 61)
+def test_database_routines(name, page):
+    if page == 1:
+        read_schema(name)
+    else:
+        read_page(name, page)
