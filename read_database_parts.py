@@ -101,7 +101,10 @@ def read_cell_index_from_page(fptr, howmany_cells):
             cell_index.append(convert_bytes_to_int(buffer, cell_ptr*2, 2))
     return cell_index
 
-def read_internal_table_cell(fptr):
+
+def decode_internal_table_cell(fptr):
+    # A 4-byte big-endian page number which is the left child pointer.
+    # A varint which is the integer key (ignored for our purposes)
     buffer = fptr.read(4)
     left_child_pointer = convert_bytes_to_int(buffer, 0, 4)
     key = decode_stream(fptr)
@@ -109,18 +112,21 @@ def read_internal_table_cell(fptr):
 
 
 def read_btree_internal_table(fptr, cell_index):
-    # A 4-byte big-endian page number which is the left child pointer.
-    # A varint which is the integer key
+    # cell index is the list of offset from beginning of page of each record
+    # ordered from first record to last record
     page_index = []
     for start in cell_index:
         fptr.seek(start)
-        left_child_pointer, key = read_internal_table_cell(fptr)
+        left_child_pointer, key = decode_internal_table_cell(fptr)
         page_index.append(left_child_pointer)
     return page_index
 
 
 
 def read_btree_leaf_from_file(fptr):
+    # It reads a single database record
+    # it does not handle record overflow
+    # no internal checks on size
     # print("==================================")
     payload_size = decode_stream(fptr)
     # print("========== READ key ==========")
@@ -159,6 +165,9 @@ def read_btree_leaf_from_file(fptr):
 
 
 def read_schema(path):
+    # reads the sqlite_master table on page 1.
+    # Page 1 is different from all other pages, because it contains 100 byte of
+    # database header
     database_info = DatabaseHandler(path)
     page1 = database_info.get_page(1)
     read_database_header_from_file(page1)
@@ -172,6 +181,8 @@ def read_page(path, number):
 
 def read_page_from_block(fptr, database_info):
     # fptr is pointing at the beginning of the page
+    # it uses recursions, not good for streaming, but it can be changed
+    # easily to read just one page
     page_type, \
     content_start, \
     number_of_cells, \
@@ -191,9 +202,9 @@ def read_page_from_block(fptr, database_info):
             print(row_list)
     if page_type == INTERIOR_TABLE:
         fptr.seek(0)
-        print(f"after page {fptr.tell()}")
+        # print(f"after page {fptr.tell()}")
         page_index = read_btree_internal_table(fptr, cell_index)
-        print (f"page_index = {page_index}")
+        # print (f"page_index = {page_index}")
         for page in page_index:
             page_buffer = database_info.get_page(page)
             # print(f"====== Reading page {page}")
