@@ -1,4 +1,4 @@
-# stream-sqlite
+# stream-sqlite [![CircleCI](https://circleci.com/gh/uktrade/stream-sqlite.svg?style=shield)](https://circleci.com/gh/uktrade/stream-sqlite) [![Maintainability](https://api.codeclimate.com/v1/badges/b665c7634e8194fe6878/maintainability)](https://codeclimate.com/github/uktrade/stream-sqlite/maintainability)
 
 It can read a table from sqlite page(s)
 Hardcoded database path for convenience
