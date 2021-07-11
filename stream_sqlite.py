@@ -68,7 +68,6 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
     page_size, = unsigned_short.unpack(header[16:18])
     page_size = 65536 if page_size == 1 else page_size
     num_pages_expected, = unsigned_long.unpack(header[28:32])
-    page_num = 1
 
     for page_num in range(1, num_pages_expected + 1):
         num_bytes_on_page = page_size - 100 if page_num == 1 else page_size
