@@ -8,7 +8,11 @@ from stream_sqlite import stream_sqlite
 class TestStreamSqlite(unittest.TestCase):
 
     def test_stream_sqlite(self):
-        for chunk in stream_sqlite(small_db_bytes()):
+        chunks = stream_sqlite(small_db_bytes())
+        first = next(chunks)
+        self.assertEqual(len(first), 100)
+        self.assertEqual(first[:15], b'SQLite format 3')
+        for chunk in chunks:
             pass
 
 def small_db_bytes():
