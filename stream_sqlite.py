@@ -16,13 +16,11 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         high_bit = 1
         i = 0
 
-        while high_bit:
-            if i == 8:
-                high_bit = 0
-                value = (value << 8) + page[p + i]
-            else:
-                high_bit = page[p] >> 7
-                value = (value << 7) + (page[p + i] & 0x7F)
+        while high_bit and i < 9:
+            high_bit = page[p] >> 7
+            value = \
+                ((value << 8) + page[p + i]) if i == 8 else \
+                ((value << 7) + (page[p + i] & 0x7F))
 
             i += 1
             p += 1
