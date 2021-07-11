@@ -76,6 +76,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
     for page_num in range(1, num_pages_expected + 1):
         page_bytes = get_num(page_size - 100 if page_num == 1 else page_size)
+        pointer_adjustment = -100 if page_num == 1 else 0
 
         page_type = page_bytes[0:1]
         first_free_block, num_cells, cell_content_start, num_frag_free = \
@@ -89,11 +90,15 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             12 if page_type in (INTERIOR_INDEX, INTERIOR_TABLE) else \
             8
         pointer_array_end_index = pointer_array_start_index + num_cells * 2
-        pointers = Struct('>{}H'.format(num_cells)).unpack(page_bytes[pointer_array_start_index:pointer_array_end_index])
+        pointers = Struct('>{}H'.format(num_cells)).unpack(page_bytes[pointer_array_start_index:pointer_array_end_index]) + (page_size,)
+
+        for i in range(0, len(pointers) - 1):
+            p_start = pointers[i] + pointer_adjustment
+            p_end = pointers[i + 1] + pointer_adjustment
+            yield page_bytes[p_start:p_end]
 
         if first_free_block:
             raise ValueError('Freeblock found, but are not supported')
-        yield page_bytes
 
     extra = False
     for _ in yield_all():
