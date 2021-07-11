@@ -2,6 +2,11 @@ from struct import Struct
 
 
 def stream_sqlite(sqlite_chunks, chunk_size=65536):
+    INTERIOR_INDEX = b'\x02'
+    INTERIOR_TABLE = b'\x05'
+    LEAF_INDEX = b'\x0a'
+    LEAF_TABLE = b'\x0d'
+
     unsigned_short = Struct('>H')
     unsigned_long = Struct('>L')
 
@@ -70,8 +75,15 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
     num_pages_expected, = unsigned_long.unpack(header[28:32])
 
     for page_num in range(1, num_pages_expected + 1):
-        num_bytes_on_page = page_size - 100 if page_num == 1 else page_size
-        page_bytes = get_num(num_bytes_on_page)
+        page_bytes = get_num(page_size - 100 if page_num == 1 else page_size)
+
+        page_type = page_bytes[0:1]
+        first_free_block, num_cells, cell_content_start, num_frag_free = \
+            Struct('>HHHB').unpack(page_bytes[1:8])
+        right_most_pointer = \
+            page_bytes[8:12] if page_type in (INTERIOR_INDEX, INTERIOR_TABLE) else \
+            None
+
         yield page_bytes
 
     extra = False
