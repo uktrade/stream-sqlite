@@ -41,7 +41,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                     try:
                         chunk = next(it)
                     except StopIteration:
-                        raise ValueError('Fewer bytes than expected in sqlite file') from None
+                        raise ValueError('Fewer bytes than expected in SQLite file') from None
                 prev_offset = offset
                 prev_chunk = chunk
                 to_yield = min(num, len(chunk) - offset, chunk_size)
