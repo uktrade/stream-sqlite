@@ -10,23 +10,6 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
     unsigned_short = Struct('>H')
     unsigned_long = Struct('>L')
 
-    def varint(p, page):
-        # This probably doesn't work with negative numbers
-        value = 0
-        high_bit = 1
-        i = 0
-
-        while high_bit and i < 9:
-            high_bit = page[p] >> 7
-            value = \
-                ((value << 8) + page[p + i]) if i == 8 else \
-                ((value << 7) + (page[p + i] & 0x7F))
-
-            i += 1
-            p += 1
-
-        return p, value, i
-
     def get_byte_readers(iterable):
         # Return functions to return bytes from the iterable
         # - _yield_all: yields chunks as they come up (often for a "body")
@@ -75,9 +58,51 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         def _get_num(num):
             return b''.join(chunk for chunk in _yield_num(num))
 
-        return _yield_all, _yield_num, _get_num
+        def _return_unused(unused):
+            nonlocal chunk
+            nonlocal offset
+            if len(unused) <= offset:
+                offset -= len(unused)
+            else:
+                chunk = unused + chunk[offset:]
+                offset = 0
 
-    yield_all, yield_num, get_num = get_byte_readers(sqlite_chunks)
+        return _yield_all, _yield_num, _get_num, _return_unused
+
+    def get_chunk_readers(chunk):
+        # Set of functions to read a chunk of bytes, which it itself made of
+        # of variable length chunks. Maintains a pointer to the current index
+        # of the main chunk
+        p = 0
+
+        def _get_num(num):
+            nonlocal p
+            p_orig = p
+            p += num
+            return chunk[p_orig:p_orig+num]
+
+        def _get_varint():
+            # This probably doesn't work with negative numbers
+            nonlocal p
+            
+            value = 0
+            high_bit = 1
+            i = 0
+
+            while high_bit and i < 9:
+                high_bit = chunk[p] >> 7
+                value = \
+                    ((value << 8) + chunk[p + i]) if i == 8 else \
+                    ((value << 7) + (chunk[p + i] & 0x7F))
+
+                i += 1
+                p += 1
+
+            return value, i
+
+        return _get_num, _get_varint
+
+    yield_all, yield_num, get_num, return_unused = get_byte_readers(sqlite_chunks)
 
     header = get_num(100)
     total_bytes = len(header)
@@ -91,57 +116,52 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
     page_size = 65536 if page_size == 1 else page_size
     num_pages_expected, = unsigned_long.unpack(header[28:32])
 
-    for page_num in range(1, num_pages_expected + 1):
-        page_bytes = get_num(page_size - 100 if page_num == 1 else page_size)
-        pointer_adjustment = -100 if page_num == 1 else 0
+    return_unused(header)
 
-        page_type = page_bytes[0:1]
+    for page_num in range(1, num_pages_expected + 1):
+        page_bytes = get_num(page_size)
+        page_num_reader, _ = get_chunk_readers(page_bytes)
+        if page_num == 1:
+            page_num_reader(100)
+
+        page_type = page_num_reader(1)
         first_free_block, num_cells, cell_content_start, num_frag_free = \
-            Struct('>HHHB').unpack(page_bytes[1:8])
+            Struct('>HHHB').unpack(page_num_reader(7))
         cell_content_start = 65536 if cell_content_start == 0 else cell_content_start
         right_most_pointer = \
-            page_bytes[8:12] if page_type in (INTERIOR_INDEX, INTERIOR_TABLE) else \
+            page_num_reader(4) if page_type in (INTERIOR_INDEX, INTERIOR_TABLE) else \
             None
 
-        pointer_array_start_index = \
-            12 if page_type in (INTERIOR_INDEX, INTERIOR_TABLE) else \
-            8
-        pointer_array_end_index = pointer_array_start_index + num_cells * 2
-        pointers = Struct('>{}H'.format(num_cells)).unpack(page_bytes[pointer_array_start_index:pointer_array_end_index]) + (page_size,)
+        pointers = Struct('>{}H'.format(num_cells)).unpack(page_num_reader(num_cells * 2)) + (page_size,)
 
         for i in range(0, len(pointers) - 1):
-            p_start = pointers[i] + pointer_adjustment
-            p_end = pointers[i + 1] + pointer_adjustment
+            cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes[pointers[i]:pointers[i + 1]])
 
             if page_type == LEAF_TABLE:
-                p, payload_size, _ = varint(p_start, page_bytes)
-                p, rowid, _ = varint(p, page_bytes)
-                payload = page_bytes[p:p+payload_size]
+                payload_size, _ = cell_varint_reader()
+                rowid, _ = cell_varint_reader()
 
-                p, header_remaining, header_varint_size = varint(p, page_bytes)
+                header_remaining, header_varint_size = cell_varint_reader()
                 header_remaining -= header_varint_size
 
                 serial_types = []
                 while header_remaining:
-                    p, h, v_size = varint(p, page_bytes)
+                    h, v_size = cell_varint_reader()
                     serial_types.append(h)
                     header_remaining -= v_size
 
                 for serial_type in serial_types:
                     if serial_type == 1:
                         length = 1
-                        value = page_bytes[p:p+length]
-                        p += length
+                        value = cell_num_reader(length)
                         yield value
                     elif serial_type >= 12 and serial_type % 2 == 0:
                         length = int((serial_type - 12)/2)
-                        value = page_bytes[p:p+length]
-                        p += length
+                        value = cell_num_reader(length)
                         yield value
                     elif serial_type >= 13 and serial_type % 2 == 1:
                         length = int((serial_type - 13)/2)
-                        value = page_bytes[p:p+length]
-                        p += length
+                        value = cell_num_reader(length)
                         yield value
                     else:
                         raise ValueError('Unsupported type')
