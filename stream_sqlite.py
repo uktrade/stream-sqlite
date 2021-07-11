@@ -153,18 +153,14 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                 for serial_type in serial_types:
                     if serial_type == 1:
                         length = 1
-                        value = cell_num_reader(length)
-                        yield value
                     elif serial_type >= 12 and serial_type % 2 == 0:
                         length = int((serial_type - 12)/2)
-                        value = cell_num_reader(length)
-                        yield value
                     elif serial_type >= 13 and serial_type % 2 == 1:
                         length = int((serial_type - 13)/2)
-                        value = cell_num_reader(length)
-                        yield value
                     else:
                         raise ValueError('Unsupported type')
+
+                    yield cell_num_reader(length)
 
         if first_free_block:
             raise ValueError('Freeblock found, but are not supported')
