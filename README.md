@@ -1,4 +1,4 @@
-# sqlite-firebreak
+# stream-sqlite
 
 It can read a table from sqlite page(s)
 Hardcoded database path for convenience
