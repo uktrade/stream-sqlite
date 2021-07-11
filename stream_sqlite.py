@@ -74,7 +74,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         yield chunk
 
     if total_bytes % page_size != 0:
-        raise ValueError('sqlite file is not a whole number of pages')
+        raise ValueError('SQLite file is not a whole number of pages')
 
     if total_bytes/page_size != num_pages_expected:
         raise ValueError('Unexpected number of pages')
