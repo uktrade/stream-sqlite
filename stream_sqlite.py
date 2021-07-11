@@ -10,6 +10,25 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
     unsigned_short = Struct('>H')
     unsigned_long = Struct('>L')
 
+    def varint(p, page):
+        # This probably doesn't work with negative numbers
+        value = 0
+        high_bit = 1
+        i = 0
+
+        while high_bit:
+            if i == 8:
+                high_bit = 0
+                value = (value << 7) + page[p + i]
+            else:
+                high_bit = page[p] >> 7
+                value = (value << 7) + (page[p + i] & 0x7F)
+
+            i += 1
+            p += 1
+
+        return p, value
+
     def get_byte_readers(iterable):
         # Return functions to return bytes from the iterable
         # - _yield_all: yields chunks as they come up (often for a "body")
@@ -95,7 +114,12 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         for i in range(0, len(pointers) - 1):
             p_start = pointers[i] + pointer_adjustment
             p_end = pointers[i + 1] + pointer_adjustment
-            yield page_bytes[p_start:p_end]
+
+            if page_type == LEAF_TABLE:
+                p, payload_size = varint(p_start, page_bytes)
+                p, rowid = varint(p, page_bytes)
+                payload = page_bytes[p:p+payload_size]
+                yield payload
 
         if first_free_block:
             raise ValueError('Freeblock found, but are not supported')
