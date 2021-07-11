@@ -151,13 +151,13 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                     header_remaining -= v_size
 
                 for serial_type in serial_types:
-                    if serial_type == 1:
-                        length = 1
-                    elif serial_type >= 12 and serial_type % 2 == 0:
-                        length = int((serial_type - 12)/2)
-                    elif serial_type >= 13 and serial_type % 2 == 1:
-                        length = int((serial_type - 13)/2)
-                    else:
+                    length = \
+                        1 if serial_type == 1 else \
+                        int((serial_type - 12)/2) if serial_type >= 12 and serial_type % 2 == 0 else \
+                        int((serial_type - 13)/2) if serial_type >= 13 and serial_type % 2 == 1 else \
+                        None
+                    
+                    if length is None:
                         raise ValueError('Unsupported type')
 
                     yield cell_num_reader(length)
