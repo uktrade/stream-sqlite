@@ -68,13 +68,16 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
     page_size, = unsigned_short.unpack(header[16:18])
     page_size = 65536 if page_size == 1 else page_size
     num_pages_expected, = unsigned_long.unpack(header[28:32])
+    page_num = 1
 
-    for chunk in yield_all():
-        total_bytes += len(chunk)
-        yield chunk
+    for page_num in range(1, num_pages_expected + 1):
+        num_bytes_on_page = page_size - 100 if page_num == 1 else page_size
+        page_bytes = get_num(num_bytes_on_page)
+        yield page_bytes
 
-    if total_bytes % page_size != 0:
-        raise ValueError('SQLite file is not a whole number of pages')
+    extra = False
+    for _ in yield_all():
+        extra = True
 
-    if total_bytes/page_size != num_pages_expected:
-        raise ValueError('Unexpected number of pages')
+    if extra:
+        raise Exception('More bytes than expected in SQLite file')
