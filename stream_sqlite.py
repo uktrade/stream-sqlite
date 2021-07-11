@@ -3,6 +3,7 @@ from struct import Struct
 
 def stream_sqlite(sqlite_chunks, chunk_size=65536):
     unsigned_short = Struct('>H')
+    unsigned_long = Struct('>L')
 
     def get_byte_readers(iterable):
         # Return functions to return bytes from the iterable
@@ -62,6 +63,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
     page_size, = unsigned_short.unpack(header[16:18])
     page_size = 65536 if page_size == 1 else page_size
+    num_pages_expected, = unsigned_long.unpack(header[28:32])
 
     for chunk in yield_all():
         total_bytes += len(chunk)
@@ -69,3 +71,6 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
     if total_bytes % page_size != 0:
         raise ValueError('sqlite file is not a whole number of pages')
+
+    if total_bytes/page_size != num_pages_expected:
+        raise ValueError('Unexpected number of pages')
