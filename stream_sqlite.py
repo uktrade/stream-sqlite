@@ -27,7 +27,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             i += 1
             p += 1
 
-        return p, value
+        return p, value, i
 
     def get_byte_readers(iterable):
         # Return functions to return bytes from the iterable
@@ -116,10 +116,37 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             p_end = pointers[i + 1] + pointer_adjustment
 
             if page_type == LEAF_TABLE:
-                p, payload_size = varint(p_start, page_bytes)
-                p, rowid = varint(p, page_bytes)
+                p, payload_size, _ = varint(p_start, page_bytes)
+                p, rowid, _ = varint(p, page_bytes)
                 payload = page_bytes[p:p+payload_size]
-                yield payload
+
+                p, header_remaining, header_varint_size = varint(p, page_bytes)
+                header_remaining -= header_varint_size
+
+                serial_types = []
+                while header_remaining:
+                    p, h, v_size = varint(p, page_bytes)
+                    serial_types.append(h)
+                    header_remaining -= v_size
+
+                for serial_type in serial_types:
+                    if serial_type == 1:
+                        length = 1
+                        value = page_bytes[p:p+length]
+                        p += length
+                        yield value
+                    elif serial_type >= 12 and serial_type % 2 == 0:
+                        length = int((serial_type - 12)/2)
+                        value = page_bytes[p:p+length]
+                        p += length
+                        yield value
+                    elif serial_type >= 13 and serial_type % 2 == 1:
+                        length = int((serial_type - 13)/2)
+                        value = page_bytes[p:p+length]
+                        p += length
+                        yield value
+                    else:
+                        raise ValueError('Unsupported type')
 
         if first_free_block:
             raise ValueError('Freeblock found, but are not supported')

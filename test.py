@@ -12,8 +12,10 @@ class TestStreamSqlite(unittest.TestCase):
         first = next(chunks)
         self.assertEqual(len(first), 100)
         self.assertEqual(first[:15], b'SQLite format 3')
-        for chunk in chunks:
-            pass
+
+        all_chunks = [chunk for chunk in chunks]
+        self.assertIn(b'some-text-a', all_chunks)
+        self.assertIn(b'some-text-b', all_chunks)
 
 def small_db_bytes():
     with tempfile.NamedTemporaryFile() as fp:
