@@ -20,9 +20,9 @@ def small_db_bytes():
         with sqlite3.connect(fp.name) as con:
             cur = con.cursor()
             cur.execute('''
-                CREATE TABLE my_table (my_text_col text)
+                CREATE TABLE my_table (my_text_col_a text, my_text_col_b text)
             ''')
-            cur.execute("INSERT INTO my_table VALUES ('some-text')")
+            cur.execute("INSERT INTO my_table VALUES ('some-text-a', 'some-text-b')")
             con.commit()
 
         with open(fp.name, 'rb') as f:
