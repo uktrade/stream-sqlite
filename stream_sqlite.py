@@ -102,6 +102,13 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
         return _get_num, _get_varint
 
+    def type_length(serial_type):
+        return \
+            1 if serial_type == 1 else \
+            int((serial_type - 12)/2) if serial_type >= 12 and serial_type % 2 == 0 else \
+            int((serial_type - 13)/2) if serial_type >= 13 and serial_type % 2 == 1 else \
+            None
+
     yield_all, yield_num, get_num, return_unused = get_byte_readers(sqlite_chunks)
 
     header = get_num(100)
@@ -133,6 +140,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             None
 
         pointers = Struct('>{}H'.format(num_cells)).unpack(page_num_reader(num_cells * 2)) + (page_size,)
+        master_table = []
 
         for i in range(0, len(pointers) - 1):
             cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes[pointers[i]:pointers[i + 1]])
@@ -150,17 +158,14 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                     serial_types.append(h)
                     header_remaining -= v_size
 
-                for serial_type in serial_types:
-                    length = \
-                        1 if serial_type == 1 else \
-                        int((serial_type - 12)/2) if serial_type >= 12 and serial_type % 2 == 0 else \
-                        int((serial_type - 13)/2) if serial_type >= 13 and serial_type % 2 == 1 else \
-                        None
-                    
-                    if length is None:
-                        raise ValueError('Unsupported type')
-
-                    yield cell_num_reader(length)
+                values = [
+                    cell_num_reader(type_length(serial_type))
+                    for serial_type in serial_types
+                ]
+                if page_num == 1:
+                    master_table.append(values)
+                else:
+                    yield values
 
         if first_free_block:
             raise ValueError('Freeblock found, but are not supported')
