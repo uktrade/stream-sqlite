@@ -124,23 +124,6 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
         return list(dicts())
 
-    def parse_master_table_cells(master_table_records):
-        def schema(cur, table_name, sql):
-             cur.execute(sql)
-             return query_list_of_dicts(cur, "PRAGMA table_info('"+ table_name + "');")
-
-        with sqlite3.connect(':memory:') as con:
-            cur = con.cursor()
-
-            return {
-                record[1]: {
-                    'columns': schema(cur, record[1].decode(), record[4].decode()),
-                    'first_page': record[3]
-                }
-                for record in master_table_records
-                if record[0] == b'table'
-            }
-
     yield_all, yield_num, get_num, return_unused = get_byte_readers(sqlite_chunks)
 
     header = get_num(100)
@@ -205,18 +188,39 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                 for cell in _yield_cells(pointers)
             ]
 
+    def master_and_non_master_pages_cells(page_cells):
+
+        def parse_master_table_cells(cells):
+            def schema(cur, table_name, sql):
+                 cur.execute(sql)
+                 return query_list_of_dicts(cur, "PRAGMA table_info('"+ table_name + "');")
+
+            with sqlite3.connect(':memory:') as con:
+                cur = con.cursor()
+
+                return {
+                    cell[1]: {
+                        'columns': schema(cur, cell[1].decode(), cell[4].decode()),
+                        'first_page': cell[3]
+                    }
+                    for cell in cells
+                    if cell[0] == b'table'
+                }
+
+        _, master_cells = next(page_cells)
+        master_table = parse_master_table_cells(master_cells)
+
+        return master_table, page_cells
+
     page_nums_pages_readers = yield_page_nums_pages_readers(page_size, num_pages_expected)
     page_cells = yield_page_cells(page_nums_pages_readers)
+    master_table, non_master_pages_cells = master_and_non_master_pages_cells(page_cells)
 
-    master_table_records = []
-    for page_num, cells in page_cells:
-        if page_num == 1:
-            master_table_records = parse_master_table_cells(cells)
-        else:
-            table_name = list(master_table_records.keys())[0]
+    for page_num, cells in non_master_pages_cells:
+            table_name = list(master_table.keys())[0]
             yield table_name, [
                 {
-                    master_table_records[table_name]['columns'][i]['name']: value
+                    master_table[table_name]['columns'][i]['name']: value
                     for i, value in enumerate(cell)
                 }
                 for cell in cells
