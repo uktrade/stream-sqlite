@@ -154,10 +154,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
     def yield_page_cells(page_nums_pages_readers):
 
-        def _yield_cells(page_type, pointers):
-            if page_type != LEAF_TABLE:
-                return
-
+        def _yield_leaf_table_cells(page_bytes, pointers):
             for i in range(0, len(pointers) - 1):
                 cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes[pointers[i]:pointers[i + 1]])
 
@@ -178,6 +175,16 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                     for serial_type in serial_types
                 ]
 
+        def _yield_none(page_bytes, pointers):
+            if False:
+                yield
+
+        def _yield_cells(page_type, page_bytes, pointers):
+            yield from (
+                _yield_leaf_table_cells(page_bytes, pointers) if page_type == LEAF_TABLE else
+                _yield_none(page_bytes, pointers)
+            )
+
         for page_num, page_bytes, page_reader in page_nums_pages_readers:
             page_type = page_reader(1)
             first_free_block, num_cells, cell_content_start, num_frag_free = \
@@ -191,7 +198,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                 raise ValueError('Freeblock found, but are not supported')
 
             pointers = tuple(reversed(Struct('>{}H'.format(num_cells)).unpack(page_reader(num_cells * 2)))) + (page_size,)
-            yield page_num, list(_yield_cells(page_type, pointers))
+            yield page_num, list(_yield_cells(page_type, page_bytes, pointers))
 
     def master_and_non_master_pages_cells(page_cells):
 
