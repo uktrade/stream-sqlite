@@ -11,14 +11,14 @@ class TestStreamSqlite(unittest.TestCase):
         chunks = stream_sqlite(small_db_bytes())
         all_chunks = [chunk for chunk in chunks]
         self.assertEqual([(
-            b'my_table_a',
+            b'my_table_1',
             [
                 {'cid': 0, 'name': 'my_text_col_a', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
                 {'cid': 1, 'name': 'my_text_col_b', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
             ],
             [{'my_text_col_a': b'some-text-a', 'my_text_col_b': b'some-text-b'}],
         ),(
-            b'my_table_b',
+            b'my_table_2',
             [
                 {'cid': 0, 'name': 'my_text_col_a', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
                 {'cid': 1, 'name': 'my_text_col_b', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
@@ -31,12 +31,12 @@ def small_db_bytes():
         with sqlite3.connect(fp.name) as con:
             cur = con.cursor()
             cur.execute('''
-                CREATE TABLE my_table_a (my_text_col_a text, my_text_col_b text);
+                CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);
             ''')
             cur.execute('''
-                CREATE TABLE my_table_b (my_text_col_a text, my_text_col_b text);
+                CREATE TABLE my_table_2 (my_text_col_a text, my_text_col_b text);
             ''')
-            cur.execute("INSERT INTO my_table_a VALUES ('some-text-a', 'some-text-b')")
+            cur.execute("INSERT INTO my_table_1 VALUES ('some-text-a', 'some-text-b')")
             con.commit()
 
         with open(fp.name, 'rb') as f:
