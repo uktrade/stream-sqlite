@@ -8,6 +8,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
     LEAF_INDEX = b'\x0a'
     LEAF_TABLE = b'\x0d'
 
+    signed_char = Struct('b')
     unsigned_short = Struct('>H')
     unsigned_long = Struct('>L')
 
@@ -110,6 +111,12 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             int((serial_type - 13)/2) if serial_type >= 13 and serial_type % 2 == 1 else \
             None
 
+    def parse_serial_value(serial_type, raw):
+        if serial_type == 1:
+            return signed_char.unpack(raw)[0]
+        else:
+            return raw
+
     def query_list_of_dicts(cur, sql):
         cols = None
         cur.execute(sql)
@@ -166,7 +173,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                         header_remaining -= v_size
 
                     yield [
-                        cell_num_reader(type_length(serial_type))
+                        parse_serial_value(serial_type, cell_num_reader(type_length(serial_type)))
                         for serial_type in serial_types
                     ]
 
@@ -181,8 +188,8 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
             if first_free_block:
                 raise ValueError('Freeblock found, but are not supported')
-            pointers = Struct('>{}H'.format(num_cells)).unpack(page_reader(num_cells * 2)) + (page_size,)
 
+            pointers = tuple(reversed(Struct('>{}H'.format(num_cells)).unpack(page_reader(num_cells * 2)))) + (page_size,)
             yield page_num, [
                 cell
                 for cell in _yield_cells(pointers)
@@ -201,7 +208,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                 return {
                     cell[1]: {
                         'columns': schema(cur, cell[1].decode(), cell[4].decode()),
-                        'first_page': cell[3]
+                        'root_page': cell[3],
                     }
                     for cell in cells
                     if cell[0] == b'table'
@@ -217,14 +224,18 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
     master_table, non_master_pages_cells = master_and_non_master_pages_cells(page_cells)
 
     for page_num, cells in non_master_pages_cells:
-            table_name = list(master_table.keys())[0]
-            yield table_name, [
-                {
-                    master_table[table_name]['columns'][i]['name']: value
-                    for i, value in enumerate(cell)
-                }
-                for cell in cells
-            ]
+        table_name = None
+        for _table_name, table in master_table.items():
+            if table['root_page'] == page_num:
+                table_name = _table_name
+
+        yield table_name, [
+            {
+                master_table[table_name]['columns'][i]['name']: value
+                for i, value in enumerate(cell)
+            }
+            for cell in cells
+        ]
 
     extra = False
     for _ in yield_all():

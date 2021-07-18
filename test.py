@@ -11,8 +11,11 @@ class TestStreamSqlite(unittest.TestCase):
         chunks = stream_sqlite(small_db_bytes())
         all_chunks = [chunk for chunk in chunks]
         self.assertEqual([(
-            b'my_table',
+            b'my_table_a',
             [{'my_text_col_a': b'some-text-a', 'my_text_col_b': b'some-text-b'}],
+        ),(
+            b'my_table_b',
+            [],
         )], all_chunks)
 
 def small_db_bytes():
@@ -20,9 +23,12 @@ def small_db_bytes():
         with sqlite3.connect(fp.name) as con:
             cur = con.cursor()
             cur.execute('''
-                CREATE TABLE my_table (my_text_col_a text, my_text_col_b text)
+                CREATE TABLE my_table_a (my_text_col_a text, my_text_col_b text);
             ''')
-            cur.execute("INSERT INTO my_table VALUES ('some-text-a', 'some-text-b')")
+            cur.execute('''
+                CREATE TABLE my_table_b (my_text_col_a text, my_text_col_b text);
+            ''')
+            cur.execute("INSERT INTO my_table_a VALUES ('some-text-a', 'some-text-b')")
             con.commit()
 
         with open(fp.name, 'rb') as f:
