@@ -124,7 +124,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
         return list(dicts())
 
-    def parse_master_table_records(master_table_records):
+    def parse_master_table_cells(master_table_records):
         def schema(cur, table_name, sql):
              cur.execute(sql)
              return query_list_of_dicts(cur, "PRAGMA table_info('"+ table_name + "');")
@@ -163,54 +163,64 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                 page_reader(100)
             yield page_num, page_bytes, page_reader
 
+    def yield_page_cells(page_nums_pages_readers):
+
+        def _yield_cells(pointers):
+            for i in range(0, len(pointers) - 1):
+                cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes[pointers[i]:pointers[i + 1]])
+
+                if page_type == LEAF_TABLE:
+                    payload_size, _ = cell_varint_reader()
+                    rowid, _ = cell_varint_reader()
+
+                    header_remaining, header_varint_size = cell_varint_reader()
+                    header_remaining -= header_varint_size
+
+                    serial_types = []
+                    while header_remaining:
+                        h, v_size = cell_varint_reader()
+                        serial_types.append(h)
+                        header_remaining -= v_size
+
+                    yield [
+                        cell_num_reader(type_length(serial_type))
+                        for serial_type in serial_types
+                    ]
+
+        for page_num, page_bytes, page_reader in page_nums_pages_readers:
+            page_type = page_reader(1)
+            first_free_block, num_cells, cell_content_start, num_frag_free = \
+                Struct('>HHHB').unpack(page_reader(7))
+            cell_content_start = 65536 if cell_content_start == 0 else cell_content_start
+            right_most_pointer = \
+                page_reader(4) if page_type in (INTERIOR_INDEX, INTERIOR_TABLE) else \
+                None
+
+            if first_free_block:
+                raise ValueError('Freeblock found, but are not supported')
+            pointers = Struct('>{}H'.format(num_cells)).unpack(page_reader(num_cells * 2)) + (page_size,)
+
+            yield page_num, [
+                cell
+                for cell in _yield_cells(pointers)
+            ]
+
     page_nums_pages_readers = yield_page_nums_pages_readers(page_size, num_pages_expected)
+    page_cells = yield_page_cells(page_nums_pages_readers)
 
     master_table_records = []
-    master_table_records_parsed = {}
-    for page_num, page_bytes, page_reader in page_nums_pages_readers:
-        page_type = page_reader(1)
-        first_free_block, num_cells, cell_content_start, num_frag_free = \
-            Struct('>HHHB').unpack(page_reader(7))
-        cell_content_start = 65536 if cell_content_start == 0 else cell_content_start
-        right_most_pointer = \
-            page_reader(4) if page_type in (INTERIOR_INDEX, INTERIOR_TABLE) else \
-            None
-
-        pointers = Struct('>{}H'.format(num_cells)).unpack(page_reader(num_cells * 2)) + (page_size,)
-
-        for i in range(0, len(pointers) - 1):
-            cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes[pointers[i]:pointers[i + 1]])
-
-            if page_type == LEAF_TABLE:
-                payload_size, _ = cell_varint_reader()
-                rowid, _ = cell_varint_reader()
-
-                header_remaining, header_varint_size = cell_varint_reader()
-                header_remaining -= header_varint_size
-
-                serial_types = []
-                while header_remaining:
-                    h, v_size = cell_varint_reader()
-                    serial_types.append(h)
-                    header_remaining -= v_size
-
-                values = [
-                    cell_num_reader(type_length(serial_type))
-                    for serial_type in serial_types
-                ]
-                if page_num == 1:
-                    master_table_records.append(values)
-                else:
-                    table_name = list(master_table_records_parsed.keys())[0]
-                    yield {
-                        column['name']: values[i]
-                        for i, column in enumerate(master_table_records_parsed[table_name]['columns'])
-                    }
-
-            master_table_records_parsed = parse_master_table_records(master_table_records)
-
-        if first_free_block:
-            raise ValueError('Freeblock found, but are not supported')
+    for page_num, cells in page_cells:
+        if page_num == 1:
+            master_table_records = parse_master_table_cells(cells)
+        else:
+            table_name = list(master_table_records.keys())[0]
+            yield table_name, [
+                {
+                    master_table_records[table_name]['columns'][i]['name']: value
+                    for i, value in enumerate(cell)
+                }
+                for cell in cells
+            ]
 
     extra = False
     for _ in yield_all():
