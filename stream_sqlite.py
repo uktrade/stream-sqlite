@@ -1,4 +1,5 @@
 from struct import Struct
+import sqlite3
 
 
 def stream_sqlite(sqlite_chunks, chunk_size=65536):
@@ -109,6 +110,37 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             int((serial_type - 13)/2) if serial_type >= 13 and serial_type % 2 == 1 else \
             None
 
+    def query_list_of_dicts(cur, sql):
+        cols = None
+        cur.execute(sql)
+        rows = cur.fetchall()
+
+        def dicts():
+            nonlocal cols
+            for row in rows:
+                if cols is None:
+                    cols = [d[0] for d in cur.description]
+                yield {col: row[i] for i, col in enumerate(cols)}
+
+        return list(dicts())
+
+    def parse_master_table_records(master_table_records):
+        def schema(cur, table_name, sql):
+             cur.execute(sql)
+             return query_list_of_dicts(cur, "PRAGMA table_info('"+ table_name + "');")
+
+        with sqlite3.connect(':memory:') as con:
+            cur = con.cursor()
+
+            return {
+                record[1]: {
+                    'columns': schema(cur, record[1].decode(), record[4].decode()),
+                    'first_page': record[3]
+                }
+                for record in master_table_records
+                if record[0] == b'table'
+            }
+
     yield_all, yield_num, get_num, return_unused = get_byte_readers(sqlite_chunks)
 
     header = get_num(100)
@@ -125,6 +157,8 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
     return_unused(header)
 
+    master_table_records = []
+    master_table_records_parsed = {}
     for page_num in range(1, num_pages_expected + 1):
         page_bytes = get_num(page_size)
         page_num_reader, _ = get_chunk_readers(page_bytes)
@@ -140,7 +174,6 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             None
 
         pointers = Struct('>{}H'.format(num_cells)).unpack(page_num_reader(num_cells * 2)) + (page_size,)
-        master_table = []
 
         for i in range(0, len(pointers) - 1):
             cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes[pointers[i]:pointers[i + 1]])
@@ -163,9 +196,15 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                     for serial_type in serial_types
                 ]
                 if page_num == 1:
-                    master_table.append(values)
+                    master_table_records.append(values)
                 else:
-                    yield values
+                    table_name = list(master_table_records_parsed.keys())[0]
+                    yield {
+                        column['name']: values[i]
+                        for i, column in enumerate(master_table_records_parsed[table_name]['columns'])
+                    }
+
+            master_table_records_parsed = parse_master_table_records(master_table_records)
 
         if first_free_block:
             raise ValueError('Freeblock found, but are not supported')
