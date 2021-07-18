@@ -16,7 +16,7 @@ def sqlite_bytes():
 
 # A table is not guarenteed to be contiguous in a sqlite file, so can appear
 # multiple times while iterating
-for table_name, rows in stream_sqlite(stream_sqlite()):
+for table_name, rows in stream_sqlite(sqlite_bytes()):
     for row in rows:
         print(row)
 ```
