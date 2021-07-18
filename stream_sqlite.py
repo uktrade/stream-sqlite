@@ -149,8 +149,6 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
     if header[:16] != b'SQLite format 3\0':
         raise ValueError('Magic SQLite header string not found')
 
-    yield header
-
     page_size, = unsigned_short.unpack(header[16:18])
     page_size = 65536 if page_size == 1 else page_size
     num_pages_expected, = unsigned_long.unpack(header[28:32])
