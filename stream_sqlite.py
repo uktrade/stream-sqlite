@@ -203,14 +203,15 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             with sqlite3.connect(':memory:') as con:
                 cur = con.cursor()
 
-                return {
-                    cell[1]: {
-                        'columns': schema(cur, cell[1].decode(), cell[4].decode()),
+                return [
+                    {
+                        'name': cell[1],
+                        'info': schema(cur, cell[1].decode(), cell[4].decode()),
                         'root_page': cell[3],
                     }
                     for cell in cells
                     if cell[0] == b'table'
-                }
+                ]
 
         _, master_cells = next(page_cells)
         master_table = parse_master_table_cells(master_cells)
@@ -223,13 +224,15 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
     for page_num, cells in non_master_pages_cells:
         table_name = None
-        for _table_name, table in master_table.items():
-            if table['root_page'] == page_num:
-                table_name = _table_name
+        table_info = None
+        for _table in master_table:
+            if _table['root_page'] == page_num:
+                table_name = _table['name']
+                table_info = _table['info']
 
-        yield table_name, [
+        yield table_name, table_info, [
             {
-                master_table[table_name]['columns'][i]['name']: value
+                table_info[i]['name']: value
                 for i, value in enumerate(cell)
             }
             for cell in cells

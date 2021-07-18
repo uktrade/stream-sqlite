@@ -12,9 +12,17 @@ class TestStreamSqlite(unittest.TestCase):
         all_chunks = [chunk for chunk in chunks]
         self.assertEqual([(
             b'my_table_a',
+            [
+                {'cid': 0, 'name': 'my_text_col_a', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
+                {'cid': 1, 'name': 'my_text_col_b', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
+            ],
             [{'my_text_col_a': b'some-text-a', 'my_text_col_b': b'some-text-b'}],
         ),(
             b'my_table_b',
+            [
+                {'cid': 0, 'name': 'my_text_col_a', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
+                {'cid': 1, 'name': 'my_text_col_b', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
+            ],
             [],
         )], all_chunks)
 
