@@ -155,29 +155,28 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
     return_unused(header)
 
-    def yield_page_nums_pages(page_size, num_pages_expected):
+    def yield_page_nums_pages_readers(page_size, num_pages_expected):
         for page_num in range(1, num_pages_expected + 1):
             page_bytes = get_num(page_size)
-            yield page_num, page_bytes
+            page_reader, _ = get_chunk_readers(page_bytes)
+            if page_num == 1:
+                page_reader(100)
+            yield page_num, page_bytes, page_reader
 
-    page_nums_pages = yield_page_nums_pages(page_size, num_pages_expected)
+    page_nums_pages_readers = yield_page_nums_pages_readers(page_size, num_pages_expected)
 
     master_table_records = []
     master_table_records_parsed = {}
-    for page_num, page_bytes in page_nums_pages:
-        page_num_reader, _ = get_chunk_readers(page_bytes)
-        if page_num == 1:
-            page_num_reader(100)
-
-        page_type = page_num_reader(1)
+    for page_num, page_bytes, page_reader in page_nums_pages_readers:
+        page_type = page_reader(1)
         first_free_block, num_cells, cell_content_start, num_frag_free = \
-            Struct('>HHHB').unpack(page_num_reader(7))
+            Struct('>HHHB').unpack(page_reader(7))
         cell_content_start = 65536 if cell_content_start == 0 else cell_content_start
         right_most_pointer = \
-            page_num_reader(4) if page_type in (INTERIOR_INDEX, INTERIOR_TABLE) else \
+            page_reader(4) if page_type in (INTERIOR_INDEX, INTERIOR_TABLE) else \
             None
 
-        pointers = Struct('>{}H'.format(num_cells)).unpack(page_num_reader(num_cells * 2)) + (page_size,)
+        pointers = Struct('>{}H'.format(num_cells)).unpack(page_reader(num_cells * 2)) + (page_size,)
 
         for i in range(0, len(pointers) - 1):
             cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes[pointers[i]:pointers[i + 1]])
