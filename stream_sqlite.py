@@ -94,8 +94,8 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             while high_bit and i < 9:
                 high_bit = chunk[p] >> 7
                 value = \
-                    ((value << 8) + chunk[p + i]) if i == 8 else \
-                    ((value << 7) + (chunk[p + i] & 0x7F))
+                    ((value << 8) + chunk[p]) if i == 8 else \
+                    ((value << 7) + (chunk[p] & 0x7F))
 
                 i += 1
                 p += 1
