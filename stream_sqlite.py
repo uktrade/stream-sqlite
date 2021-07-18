@@ -155,26 +155,28 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
     def yield_page_cells(page_nums_pages_readers):
 
         def _yield_cells(pointers):
+            if page_type != LEAF_TABLE:
+                return
+
             for i in range(0, len(pointers) - 1):
                 cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes[pointers[i]:pointers[i + 1]])
 
-                if page_type == LEAF_TABLE:
-                    payload_size, _ = cell_varint_reader()
-                    rowid, _ = cell_varint_reader()
+                payload_size, _ = cell_varint_reader()
+                rowid, _ = cell_varint_reader()
 
-                    header_remaining, header_varint_size = cell_varint_reader()
-                    header_remaining -= header_varint_size
+                header_remaining, header_varint_size = cell_varint_reader()
+                header_remaining -= header_varint_size
 
-                    serial_types = []
-                    while header_remaining:
-                        h, v_size = cell_varint_reader()
-                        serial_types.append(h)
-                        header_remaining -= v_size
+                serial_types = []
+                while header_remaining:
+                    h, v_size = cell_varint_reader()
+                    serial_types.append(h)
+                    header_remaining -= v_size
 
-                    yield [
-                        parse_serial_value(serial_type, cell_num_reader(type_length(serial_type)))
-                        for serial_type in serial_types
-                    ]
+                yield [
+                    parse_serial_value(serial_type, cell_num_reader(type_length(serial_type)))
+                    for serial_type in serial_types
+                ]
 
         for page_num, page_bytes, page_reader in page_nums_pages_readers:
             page_type = page_reader(1)
