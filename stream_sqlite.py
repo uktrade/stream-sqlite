@@ -155,10 +155,16 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
     return_unused(header)
 
+    def yield_page_nums_pages(page_size, num_pages_expected):
+        for page_num in range(1, num_pages_expected + 1):
+            page_bytes = get_num(page_size)
+            yield page_num, page_bytes
+
+    page_nums_pages = yield_page_nums_pages(page_size, num_pages_expected)
+
     master_table_records = []
     master_table_records_parsed = {}
-    for page_num in range(1, num_pages_expected + 1):
-        page_bytes = get_num(page_size)
+    for page_num, page_bytes in page_nums_pages:
         page_num_reader, _ = get_chunk_readers(page_bytes)
         if page_num == 1:
             page_num_reader(100)
