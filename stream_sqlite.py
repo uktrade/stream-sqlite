@@ -165,6 +165,28 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                 page_number, =  unsigned_long.unpack(cell_num_reader(4))
                 yield page_number
 
+        def _get_master_table(master_cells):
+
+            def schema(cur, table_name, sql):
+                cur.execute(sql)
+                cur.execute("PRAGMA table_info('" + table_name + "');")
+                rows = cur.fetchall()
+                cols = [d[0] for d in cur.description]
+                return [{col: row[i] for i, col in enumerate(cols)} for row in rows]
+
+            with sqlite3.connect(':memory:') as con:
+                cur = con.cursor()
+
+                return [
+                    {
+                        'name': cell[1].decode(),
+                        'info': schema(cur, cell[1].decode(), cell[4].decode()),
+                        'root_page': cell[3],
+                    }
+                    for cell in master_cells
+                    if cell[0] == b'table'
+                ]
+
         def try_process_cached(table_name, page_nums):
             for page_num in page_nums:
                 try:
@@ -186,7 +208,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             pointers = Struct('>{}H'.format(num_cells)).unpack(page_reader(num_cells * 2))
 
             if page_type == LEAF_TABLE and table_name == 'sqlite_schema':
-                for row in get_master_table(_yield_leaf_table_cells(page_bytes, pointers)):
+                for row in _get_master_table(_yield_leaf_table_cells(page_bytes, pointers)):
                     master_table[row['name']] = row['info']
                     known_table_pages[row['root_page']] = row['name']
                     yield from try_process_cached(row['name'], [row['root_page']])
@@ -219,28 +241,6 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                 cached_pages[page_num] = (page_bytes, page_reader)
             else:
                 yield from process_table_page(table_name, page_bytes, page_reader)
-
-    def get_master_table(master_cells):
-
-        def schema(cur, table_name, sql):
-            cur.execute(sql)
-            cur.execute("PRAGMA table_info('" + table_name + "');")
-            rows = cur.fetchall()
-            cols = [d[0] for d in cur.description]
-            return [{col: row[i] for i, col in enumerate(cols)} for row in rows]
-
-        with sqlite3.connect(':memory:') as con:
-            cur = con.cursor()
-
-            return [
-                {
-                    'name': cell[1].decode(),
-                    'info': schema(cur, cell[1].decode(), cell[4].decode()),
-                    'root_page': cell[3],
-                }
-                for cell in master_cells
-                if cell[0] == b'table'
-            ]
 
     page_nums_pages_readers = yield_page_nums_pages_readers(page_size, num_pages_expected)
     yield from yield_tables(page_nums_pages_readers)
