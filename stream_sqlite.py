@@ -191,7 +191,6 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         def parse_master_table_cells(cells):
 
             def query_list_of_dicts(cur, sql):
-                cols = None
                 cur.execute(sql)
                 rows = cur.fetchall()
                 cols = [d[0] for d in cur.description]
