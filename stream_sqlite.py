@@ -236,7 +236,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
         for page_num, page_bytes, page_reader in page_nums_pages_readers:
             try:
-                table_name = known_table_pages[page_num]
+                table_name = known_table_pages.pop(page_num)
             except KeyError:
                 cached_pages[page_num] = (page_bytes, page_reader)
             else:
