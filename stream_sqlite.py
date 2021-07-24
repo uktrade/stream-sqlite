@@ -180,7 +180,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             if first_free_block:
                 raise ValueError('Freeblock found, but are not supported')
 
-            pointers = tuple(reversed(Struct('>{}H'.format(num_cells)).unpack(page_reader(num_cells * 2))))
+            pointers = Struct('>{}H'.format(num_cells)).unpack(page_reader(num_cells * 2))
 
             if page_type == LEAF_TABLE and table_name == 'sqlite_schema':
                 for row in get_master_table(_yield_leaf_table_cells(page_bytes, pointers)):
