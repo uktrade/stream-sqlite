@@ -60,16 +60,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         def _get_num(num):
             return b''.join(chunk for chunk in _yield_num(num))
 
-        def _return_unused(unused):
-            nonlocal chunk
-            nonlocal offset
-            if len(unused) <= offset:
-                offset -= len(unused)
-            else:
-                chunk = unused + chunk[offset:]
-                offset = 0
-
-        return _yield_all, _yield_num, _get_num, _return_unused
+        return _yield_all, _yield_num, _get_num
 
     def get_chunk_readers(chunk):
         # Set of functions to read a chunk of bytes, which it itself made of
@@ -117,7 +108,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         else:
             return raw
 
-    yield_all, yield_num, get_num, return_unused = get_byte_readers(sqlite_chunks)
+    yield_all, yield_num, get_num = get_byte_readers(sqlite_chunks)
 
     header = get_num(100)
 
@@ -128,14 +119,17 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
     page_size = 65536 if page_size == 1 else page_size
     num_pages_expected, = unsigned_long.unpack(header[28:32])
 
-    return_unused(header)
-
     def yield_page_nums_pages_readers(page_size, num_pages_expected):
-        for page_num in range(1, num_pages_expected + 1):
+        page_bytes = header + get_num(page_size - 100)
+        page_reader, _ = get_chunk_readers(page_bytes)
+        page_reader(100)
+
+        yield 1, page_bytes, page_reader
+
+        for page_num in range(2, num_pages_expected + 1):
             page_bytes = get_num(page_size)
             page_reader, _ = get_chunk_readers(page_bytes)
-            if page_num == 1:
-                page_reader(100)
+
             yield page_num, page_bytes, page_reader
 
     def yield_page_cells(page_nums_pages_readers):
