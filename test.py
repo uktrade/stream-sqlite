@@ -42,11 +42,10 @@ class TestStreamSqlite(unittest.TestCase):
 
 def db(sqls, chunk_size):
     with tempfile.NamedTemporaryFile() as fp:
-        with sqlite3.connect(fp.name) as con:
+        with sqlite3.connect(fp.name, isolation_level=None) as con:
             cur = con.cursor()
             for sql in sqls:
                 cur.execute(sql)
-            con.commit()
 
         with open(fp.name, 'rb') as f:
             while True:
