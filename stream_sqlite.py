@@ -132,9 +132,14 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
             yield page_num, page_bytes, page_reader
 
-    def yield_page_cells(page_nums_pages_readers):
+    def yield_tables(page_nums_pages_readers):
+        cached_pages = {}
+        known_table_pages = {
+            1: 'sqlite_schema',
+        }
+        master_table = {}
 
-        def _yield_leaf_table_cells(page_bytes, pointers):
+        def _yield_table_cells(page_bytes, pointers):
             for i in range(0, len(pointers) - 1):
                 cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes[pointers[i]:pointers[i + 1]])
 
@@ -155,32 +160,58 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                     for serial_type in serial_types
                 ]
 
-        def _yield_none(page_bytes, pointers):
-            if False:
-                yield
+        def try_process_cached(table_name, page_nums):
+            for page_num in page_nums:
+                try:
+                    cached_page_bytes, cached_page_reader = cached_pages.pop(page_num)
+                except KeyError:
+                    pass
+                else:
+                    yield from process_table_page(table_name, cached_page_bytes, cached_page_reader)
 
-        def _yield_cells(page_type, page_bytes, pointers):
-            yield from (
-                _yield_leaf_table_cells(page_bytes, pointers) if page_type == LEAF_TABLE else
-                _yield_none(page_bytes, pointers)
-            )
-
-        for page_num, page_bytes, page_reader in page_nums_pages_readers:
+        def process_table_page(table_name, page_bytes, page_reader):
             page_type = page_reader(1)
             first_free_block, num_cells, cell_content_start, num_frag_free = \
                 Struct('>HHHB').unpack(page_reader(7))
             cell_content_start = 65536 if cell_content_start == 0 else cell_content_start
             right_most_pointer = \
-                page_reader(4) if page_type in (INTERIOR_INDEX, INTERIOR_TABLE) else \
+                page_reader(4) if page_type == INTERIOR_TABLE else \
                 None
 
             if first_free_block:
                 raise ValueError('Freeblock found, but are not supported')
 
             pointers = tuple(reversed(Struct('>{}H'.format(num_cells)).unpack(page_reader(num_cells * 2)))) + (page_size,)
-            yield page_num, list(_yield_cells(page_type, page_bytes, pointers))
+            cells = list(_yield_table_cells(page_bytes, pointers))
 
-    def master_and_non_master_pages_cells(page_cells):
+            if page_type == LEAF_TABLE and table_name == 'sqlite_schema':
+                for row in get_master_table(cells):
+                    master_table[row['name']] = row['info']
+                    known_table_pages[row['root_page']] = row['name']
+                    yield from try_process_cached(row['name'], [row['root_page']])
+
+            elif page_type == LEAF_TABLE:
+                table_info = master_table[table_name]
+                yield table_name, table_info, [
+                    {
+                        table_info[i]['name']: value
+                        for i, value in enumerate(cell)
+                    }
+                    for cell in cells
+                ]
+
+            else:
+                raise Exception('Unhandled page type')
+
+        for page_num, page_bytes, page_reader in page_nums_pages_readers:
+            try:
+                table_name = known_table_pages[page_num]
+            except KeyError:
+                cached_pages[page_num] = (page_bytes, page_reader)
+            else:
+                yield from process_table_page(table_name, page_bytes, page_reader)
+
+    def get_master_table(master_cells):
 
         def schema(cur, table_name, sql):
             cur.execute(sql)
@@ -188,8 +219,6 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             rows = cur.fetchall()
             cols = [d[0] for d in cur.description]
             return [{col: row[i] for i, col in enumerate(cols)} for row in rows]
-
-        _, master_cells = next(page_cells)
 
         with sqlite3.connect(':memory:') as con:
             cur = con.cursor()
@@ -202,27 +231,10 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                 }
                 for cell in master_cells
                 if cell[0] == b'table'
-            ], page_cells
+            ]
 
     page_nums_pages_readers = yield_page_nums_pages_readers(page_size, num_pages_expected)
-    page_cells = yield_page_cells(page_nums_pages_readers)
-    master_table, non_master_pages_cells = master_and_non_master_pages_cells(page_cells)
-
-    for page_num, cells in non_master_pages_cells:
-        table_name = None
-        table_info = None
-        for _table in master_table:
-            if _table['root_page'] == page_num:
-                table_name = _table['name']
-                table_info = _table['info']
-
-        yield table_name, table_info, [
-            {
-                table_info[i]['name']: value
-                for i, value in enumerate(cell)
-            }
-            for cell in cells
-        ]
+    yield from yield_tables(page_nums_pages_readers)
 
     extra = False
     for _ in yield_all():
