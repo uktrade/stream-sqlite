@@ -62,11 +62,10 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
         return _yield_all, _yield_num, _get_num
 
-    def get_chunk_readers(chunk):
+    def get_chunk_readers(chunk, p=0):
         # Set of functions to read a chunk of bytes, which it itself made of
         # of variable length chunks. Maintains a pointer to the current index
         # of the main chunk
-        p = 0
 
         def _get_num(num):
             nonlocal p
@@ -141,7 +140,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
         def _yield_leaf_table_cells(page_bytes, pointers):
             for i in range(0, len(pointers) - 1):
-                cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes[pointers[i]:pointers[i + 1]])
+                cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointers[i])
 
                 payload_size, _ = cell_varint_reader()
                 rowid, _ = cell_varint_reader()
