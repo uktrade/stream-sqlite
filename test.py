@@ -7,7 +7,7 @@ from stream_sqlite import stream_sqlite
 
 class TestStreamSqlite(unittest.TestCase):
 
-    def test_stream_sqlite(self):
+    def test_small_table(self):
         for chunk_size in [1, 2, 3, 5, 7, 32, 131072]:
             with self.subTest(chunk_size=chunk_size):
                 sqls = [
