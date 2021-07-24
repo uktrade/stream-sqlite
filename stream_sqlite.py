@@ -117,20 +117,6 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         else:
             return raw
 
-    def query_list_of_dicts(cur, sql):
-        cols = None
-        cur.execute(sql)
-        rows = cur.fetchall()
-
-        def dicts():
-            nonlocal cols
-            for row in rows:
-                if cols is None:
-                    cols = [d[0] for d in cur.description]
-                yield {col: row[i] for i, col in enumerate(cols)}
-
-        return list(dicts())
-
     yield_all, yield_num, get_num, return_unused = get_byte_readers(sqlite_chunks)
 
     header = get_num(100)
@@ -203,6 +189,21 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
     def master_and_non_master_pages_cells(page_cells):
 
         def parse_master_table_cells(cells):
+
+            def query_list_of_dicts(cur, sql):
+                cols = None
+                cur.execute(sql)
+                rows = cur.fetchall()
+
+                def dicts():
+                    nonlocal cols
+                    for row in rows:
+                        if cols is None:
+                            cols = [d[0] for d in cur.description]
+                        yield {col: row[i] for i, col in enumerate(cols)}
+
+                return list(dicts())
+
             def schema(cur, table_name, sql):
                  cur.execute(sql)
                  return query_list_of_dicts(cur, "PRAGMA table_info('"+ table_name + "');")
