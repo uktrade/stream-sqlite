@@ -159,6 +159,12 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                     for serial_type in serial_types
                 ]
 
+        def _yield_interior_table_cells(page_bytes, pointers):
+            for pointer in pointers:
+                cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
+                page_number, =  unsigned_long.unpack(cell_num_reader(4))
+                yield page_number
+
         def try_process_cached(table_name, page_nums):
             for page_num in page_nums:
                 try:
@@ -177,9 +183,6 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                 page_reader(4) if page_type == INTERIOR_TABLE else \
                 None
 
-            if first_free_block:
-                raise ValueError('Freeblock found, but are not supported')
-
             pointers = Struct('>{}H'.format(num_cells)).unpack(page_reader(num_cells * 2))
 
             if page_type == LEAF_TABLE and table_name == 'sqlite_schema':
@@ -197,6 +200,11 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                     }
                     for cell in _yield_leaf_table_cells(page_bytes, pointers)
                 ]
+
+            elif page_type == INTERIOR_TABLE:
+                for page_num in _yield_interior_table_cells(page_bytes, pointers):
+                    known_table_pages[page_num] = table_name
+                    yield from try_process_cached(table_name, [page_num])
 
             else:
                 raise Exception('Unhandled page type')
