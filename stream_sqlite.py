@@ -182,10 +182,9 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                 raise ValueError('Freeblock found, but are not supported')
 
             pointers = tuple(reversed(Struct('>{}H'.format(num_cells)).unpack(page_reader(num_cells * 2)))) + (page_size,)
-            cells = list(_yield_leaf_table_cells(page_bytes, pointers))
 
             if page_type == LEAF_TABLE and table_name == 'sqlite_schema':
-                for row in get_master_table(cells):
+                for row in get_master_table(_yield_leaf_table_cells(page_bytes, pointers)):
                     master_table[row['name']] = row['info']
                     known_table_pages[row['root_page']] = row['name']
                     yield from try_process_cached(row['name'], [row['root_page']])
@@ -197,7 +196,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                         table_info[i]['name']: value
                         for i, value in enumerate(cell)
                     }
-                    for cell in cells
+                    for cell in _yield_leaf_table_cells(page_bytes, pointers)
                 ]
 
             else:
