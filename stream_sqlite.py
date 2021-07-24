@@ -198,7 +198,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
             def schema(cur, table_name, sql):
                  cur.execute(sql)
-                 return query_list_of_dicts(cur, "PRAGMA table_info('"+ table_name + "');")
+                 return query_list_of_dicts(cur, "PRAGMA table_info('" + table_name + "');")
 
             with sqlite3.connect(':memory:') as con:
                 cur = con.cursor()
