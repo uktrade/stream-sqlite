@@ -182,32 +182,27 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
     def master_and_non_master_pages_cells(page_cells):
 
-        def parse_master_table_cells(cells):
-
-            def schema(cur, table_name, sql):
-                cur.execute(sql)
-                cur.execute("PRAGMA table_info('" + table_name + "');")
-                rows = cur.fetchall()
-                cols = [d[0] for d in cur.description]
-                return [{col: row[i] for i, col in enumerate(cols)} for row in rows]
-
-            with sqlite3.connect(':memory:') as con:
-                cur = con.cursor()
-
-                return [
-                    {
-                        'name': cell[1],
-                        'info': schema(cur, cell[1].decode(), cell[4].decode()),
-                        'root_page': cell[3],
-                    }
-                    for cell in cells
-                    if cell[0] == b'table'
-                ]
+        def schema(cur, table_name, sql):
+            cur.execute(sql)
+            cur.execute("PRAGMA table_info('" + table_name + "');")
+            rows = cur.fetchall()
+            cols = [d[0] for d in cur.description]
+            return [{col: row[i] for i, col in enumerate(cols)} for row in rows]
 
         _, master_cells = next(page_cells)
-        master_table = parse_master_table_cells(master_cells)
 
-        return master_table, page_cells
+        with sqlite3.connect(':memory:') as con:
+            cur = con.cursor()
+
+            return [
+                {
+                    'name': cell[1],
+                    'info': schema(cur, cell[1].decode(), cell[4].decode()),
+                    'root_page': cell[3],
+                }
+                for cell in master_cells
+                if cell[0] == b'table'
+            ], page_cells
 
     page_nums_pages_readers = yield_page_nums_pages_readers(page_size, num_pages_expected)
     page_cells = yield_page_cells(page_nums_pages_readers)
