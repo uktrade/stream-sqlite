@@ -10,7 +10,12 @@ class TestStreamSqlite(unittest.TestCase):
     def test_stream_sqlite(self):
         for chunk_size in [1, 2, 3, 5, 7, 32, 131072]:
             with self.subTest(chunk_size=chunk_size):
-                chunks = stream_sqlite(small_db_bytes(chunk_size))
+                sqls = [
+                    "CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);",
+                    "CREATE TABLE my_table_2 (my_text_col_a text, my_text_col_b text);",
+                    "INSERT INTO my_table_1 VALUES ('some-text-a', 'some-text-b')",
+                ]
+                chunks = stream_sqlite(db(sqls, chunk_size))
                 all_chunks = [chunk for chunk in chunks]
                 self.assertEqual([(
                     b'my_table_1',
@@ -28,17 +33,12 @@ class TestStreamSqlite(unittest.TestCase):
                     [],
                 )], all_chunks)
 
-def small_db_bytes(chunk_size):
+def db(sqls, chunk_size):
     with tempfile.NamedTemporaryFile() as fp:
         with sqlite3.connect(fp.name) as con:
             cur = con.cursor()
-            cur.execute('''
-                CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);
-            ''')
-            cur.execute('''
-                CREATE TABLE my_table_2 (my_text_col_a text, my_text_col_b text);
-            ''')
-            cur.execute("INSERT INTO my_table_1 VALUES ('some-text-a', 'some-text-b')")
+            for sql in sqls:
+                cur.execute(sql)
             con.commit()
 
         with open(fp.name, 'rb') as f:
