@@ -229,4 +229,4 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         extra = True
 
     if extra:
-        raise Exception('More bytes than expected in SQLite file')
+        raise ValueError('More bytes than expected in SQLite file')
