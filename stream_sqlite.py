@@ -190,15 +190,12 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
         def parse_master_table_cells(cells):
 
-            def query_list_of_dicts(cur, sql):
+            def schema(cur, table_name, sql):
                 cur.execute(sql)
+                cur.execute("PRAGMA table_info('" + table_name + "');")
                 rows = cur.fetchall()
                 cols = [d[0] for d in cur.description]
                 return [{col: row[i] for i, col in enumerate(cols)} for row in rows]
-
-            def schema(cur, table_name, sql):
-                 cur.execute(sql)
-                 return query_list_of_dicts(cur, "PRAGMA table_info('" + table_name + "');")
 
             with sqlite3.connect(':memory:') as con:
                 cur = con.cursor()
