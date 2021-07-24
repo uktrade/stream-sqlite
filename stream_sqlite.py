@@ -194,12 +194,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                 cur.execute(sql)
                 rows = cur.fetchall()
                 cols = [d[0] for d in cur.description]
-
-                def dicts():
-                    for row in rows:
-                        yield {col: row[i] for i, col in enumerate(cols)}
-
-                return list(dicts())
+                return [{col: row[i] for i, col in enumerate(cols)} for row in rows]
 
             def schema(cur, table_name, sql):
                  cur.execute(sql)
