@@ -7,6 +7,13 @@ from stream_sqlite import stream_sqlite
 
 class TestStreamSqlite(unittest.TestCase):
 
+    def test_empty_database(self):
+        for chunk_size in [1, 2, 3, 5, 7, 32, 131072]:
+            with self.subTest(chunk_size=chunk_size):
+                chunks = stream_sqlite(db(['VACUUM;'], chunk_size))
+                all_chunks = [chunk for chunk in chunks]
+                self.assertEqual([], all_chunks)
+
     def test_small_table(self):
         for chunk_size in [1, 2, 3, 5, 7, 32, 131072]:
             with self.subTest(chunk_size=chunk_size):
