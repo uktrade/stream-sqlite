@@ -196,7 +196,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
             return [
                 {
-                    'name': cell[1],
+                    'name': cell[1].decode(),
                     'info': schema(cur, cell[1].decode(), cell[4].decode()),
                     'root_page': cell[3],
                 }
