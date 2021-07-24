@@ -179,9 +179,9 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             first_free_block, num_cells, cell_content_start, num_frag_free = \
                 Struct('>HHHB').unpack(page_reader(7))
             cell_content_start = 65536 if cell_content_start == 0 else cell_content_start
-            right_most_pointer = \
-                page_reader(4) if page_type == INTERIOR_TABLE else \
-                None
+            right_most_pointer, = \
+                unsigned_long.unpack(page_reader(4)) if page_type == INTERIOR_TABLE else \
+                (None,)
 
             pointers = Struct('>{}H'.format(num_cells)).unpack(page_reader(num_cells * 2))
 
@@ -205,6 +205,9 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                 for page_num in _yield_interior_table_cells(page_bytes, pointers):
                     known_table_pages[page_num] = table_name
                     yield from try_process_cached(table_name, [page_num])
+
+                known_table_pages[right_most_pointer] = table_name
+                yield from try_process_cached(table_name, [right_most_pointer])
 
             else:
                 raise Exception('Unhandled page type')

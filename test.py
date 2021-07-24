@@ -63,7 +63,7 @@ class TestStreamSqlite(unittest.TestCase):
                         {'cid': 1, 'name': 'my_text_col_b', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
                     ],
                     [],
-                ) for i in range(2, 70)], all_chunks)
+                ) for i in range(2, 101)], all_chunks)
 
 def db(sqls, chunk_size):
     with tempfile.NamedTemporaryFile() as fp:
