@@ -194,12 +194,10 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                 cols = None
                 cur.execute(sql)
                 rows = cur.fetchall()
+                cols = [d[0] for d in cur.description]
 
                 def dicts():
-                    nonlocal cols
                     for row in rows:
-                        if cols is None:
-                            cols = [d[0] for d in cur.description]
                         yield {col: row[i] for i, col in enumerate(cols)}
 
                 return list(dicts())
