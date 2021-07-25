@@ -78,19 +78,6 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
         return _get_num, _get_varint
 
-    def type_length(serial_type):
-        return \
-            1 if serial_type == 1 else \
-            int((serial_type - 12)/2) if serial_type >= 12 and serial_type % 2 == 0 else \
-            int((serial_type - 13)/2) if serial_type >= 13 and serial_type % 2 == 1 else \
-            None
-
-    def parse_serial_value(serial_type, raw):
-        if serial_type == 1:
-            return signed_char.unpack(raw)[0]
-        else:
-            return raw
-
     def yield_page_nums_pages_readers(get_bytes):
         header = get_bytes(100)
 
@@ -119,6 +106,19 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             1: 'sqlite_schema',
         }
         master_table = {}
+
+        def type_length(serial_type):
+            return \
+                1 if serial_type == 1 else \
+                int((serial_type - 12)/2) if serial_type >= 12 and serial_type % 2 == 0 else \
+                int((serial_type - 13)/2) if serial_type >= 13 and serial_type % 2 == 1 else \
+                None
+
+        def parse_serial_value(serial_type, raw):
+            if serial_type == 1:
+                return signed_char.unpack(raw)[0]
+            else:
+                return raw
 
         def _yield_leaf_table_cells(page_bytes, pointers):
             for pointer in pointers:
