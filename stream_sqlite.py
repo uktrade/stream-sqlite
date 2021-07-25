@@ -1,5 +1,5 @@
 from struct import Struct, unpack
-import sqlite3
+from sqlite3 import connect
 
 
 def stream_sqlite(sqlite_chunks, chunk_size=65536):
@@ -151,7 +151,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                 cols = [d[0] for d in cur.description]
                 return [{col: row[i] for i, col in enumerate(cols)} for row in rows]
 
-            with sqlite3.connect(':memory:') as con:
+            with connect(':memory:') as con:
                 cur = con.cursor()
 
                 return [
