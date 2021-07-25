@@ -204,7 +204,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                 yield from process_if_buffered_or_remember(table_name, right_most_pointer)
 
             else:
-                raise Exception('Unhandled page type')
+                raise ValueError('Unhandled page type')
 
         for page_num, page_bytes, page_reader in page_nums_pages_readers:
             try:
