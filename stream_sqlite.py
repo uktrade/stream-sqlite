@@ -13,7 +13,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
     unsigned_long = Struct('>L')
     table_header = Struct('>HHHB')
 
-    def get_byte_readers(iterable):
+    def get_byte_reader(iterable):
         # Return functions to return bytes from the iterable
         # - _yield_all: yields chunks as they come up (often for a "body")
         # - _yield_num: yields chunks as the come up, up to a fixed number of bytes
@@ -22,23 +22,6 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         chunk = b''
         offset = 0
         it = iter(iterable)
-
-        def _yield_all():
-            nonlocal chunk
-            nonlocal offset
-
-            while True:
-                if not chunk:
-                    try:
-                        chunk = next(it)
-                    except StopIteration:
-                        break
-                prev_offset = offset
-                prev_chunk = chunk
-                to_yield = min(len(chunk) - offset, chunk_size)
-                offset = (offset + to_yield) % len(chunk)
-                chunk = chunk if offset else b''
-                yield prev_chunk[prev_offset:prev_offset + to_yield]
 
         def _yield_num(num):
             nonlocal chunk
@@ -61,7 +44,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         def _get_num(num):
             return b''.join(chunk for chunk in _yield_num(num))
 
-        return _yield_all, _get_num
+        return _get_num
 
     def get_chunk_readers(chunk, p=0):
         # Set of functions to read a chunk of bytes, which it itself made of
@@ -108,7 +91,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         else:
             return raw
 
-    yield_all, get_num = get_byte_readers(sqlite_chunks)
+    get_num = get_byte_reader(sqlite_chunks)
 
     header = get_num(100)
 
@@ -240,10 +223,3 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
     page_nums_pages_readers = yield_page_nums_pages_readers(page_size, num_pages_expected)
     yield from yield_tables(page_nums_pages_readers)
-
-    extra = False
-    for _ in yield_all():
-        extra = True
-
-    if extra:
-        raise ValueError('More bytes than expected in SQLite file')
