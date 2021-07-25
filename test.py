@@ -10,8 +10,7 @@ class TestStreamSqlite(unittest.TestCase):
     def test_empty_database(self):
         for chunk_size in [1, 2, 3, 5, 7, 32, 131072]:
             with self.subTest(chunk_size=chunk_size):
-                chunks = stream_sqlite(db(['VACUUM;'], chunk_size))
-                all_chunks = [chunk for chunk in chunks]
+                all_chunks = tables_list(stream_sqlite(db(['VACUUM;'], chunk_size)))
                 self.assertEqual([], all_chunks)
 
     def test_small_table(self):
@@ -22,8 +21,7 @@ class TestStreamSqlite(unittest.TestCase):
                     "CREATE TABLE my_table_2 (my_text_col_a text, my_text_col_b text);",
                     "INSERT INTO my_table_1 VALUES ('some-text-a', 'some-text-b')",
                 ]
-                chunks = stream_sqlite(db(sqls, chunk_size))
-                all_chunks = [chunk for chunk in chunks]
+                all_chunks = tables_list(stream_sqlite(db(sqls, chunk_size)))
                 self.assertEqual([(
                     'my_table_1',
                     [
@@ -47,8 +45,7 @@ class TestStreamSqlite(unittest.TestCase):
                     "CREATE TABLE my_table_{} (my_text_col_a text, my_text_col_b text);".format(i)
                     for i in range(1, 101)
                 ] + ["INSERT INTO my_table_1 VALUES ('some-text-a', 'some-text-b')"]
-                chunks = stream_sqlite(db(sqls, chunk_size))
-                all_chunks = [chunk for chunk in chunks]
+                all_chunks = tables_list(stream_sqlite(db(sqls, chunk_size)))
                 self.assertEqual([(
                     'my_table_1',
                     [
@@ -73,8 +70,8 @@ class TestStreamSqlite(unittest.TestCase):
                 ] + [
                     "INSERT INTO my_table_1 VALUES ('some-text-a', 'some-text-b')",
                 ] * 1000
-                chunks = stream_sqlite(db(sqls, chunk_size))
-                all_rows = flatten([chunk[2] for chunk in chunks])
+                all_chunks = tables_list(stream_sqlite(db(sqls, chunk_size)))
+                all_rows = flatten([chunk[2] for chunk in all_chunks])
 
                 self.assertEqual(
                     [{'my_text_col_a': b'some-text-a', 'my_text_col_b': b'some-text-b'}] * 1000,
@@ -94,6 +91,12 @@ def db(sqls, chunk_size):
                 if not chunk:
                     break
                 yield chunk
+
+def tables_list(table_iter):
+    return [
+        (table_name, table_info, list(table_rows))
+        for table_name, table_info, table_rows in table_iter
+    ]
 
 def flatten(l):
     return [
