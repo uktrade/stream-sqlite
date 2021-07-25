@@ -107,76 +107,77 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         }
         master_table = {}
 
-        def type_length(serial_type):
-            return \
-                1 if serial_type == 1 else \
-                int((serial_type - 12)/2) if serial_type >= 12 and serial_type % 2 == 0 else \
-                int((serial_type - 13)/2) if serial_type >= 13 and serial_type % 2 == 1 else \
-                None
-
-        def parse_serial_value(serial_type, raw):
-            return \
-                signed_char.unpack(raw)[0] if serial_type == 1 else \
-                raw
-
-        def yield_leaf_table_cells(page_bytes, pointers):
-            for pointer in pointers:
-                cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
-
-                payload_size, _ = cell_varint_reader()
-                rowid, _ = cell_varint_reader()
-
-                header_remaining, header_varint_size = cell_varint_reader()
-                header_remaining -= header_varint_size
-
-                serial_types = []
-                while header_remaining:
-                    h, v_size = cell_varint_reader()
-                    serial_types.append(h)
-                    header_remaining -= v_size
-
-                yield [
-                    parse_serial_value(serial_type, cell_num_reader(type_length(serial_type)))
-                    for serial_type in serial_types
-                ]
-
-        def yield_interior_table_cells(page_bytes, pointers):
-            for pointer in pointers:
-                cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
-                page_number, =  unsigned_long.unpack(cell_num_reader(4))
-                yield page_number
-
-        def get_master_table(master_cells):
-
-            def schema(cur, table_name, sql):
-                cur.execute(sql)
-                cur.execute("PRAGMA table_info('" + table_name + "');")
-                rows = cur.fetchall()
-                cols = [d[0] for d in cur.description]
-                return [{col: row[i] for i, col in enumerate(cols)} for row in rows]
-
-            with connect(':memory:') as con:
-                cur = con.cursor()
-
-                return [
-                    {
-                        'name': cell[1].decode(),
-                        'info': schema(cur, cell[1].decode(), cell[4].decode()),
-                        'root_page': cell[3],
-                    }
-                    for cell in master_cells
-                    if cell[0] == b'table'
-                ]
-
-        def process_if_buffered_or_remember(table_name, page_num):
-            try:
-                page_bytes, page_reader = page_buffer.pop(page_num)
-            except KeyError:
-                page_types[page_num] = ('table', table_name)
-            else:
-                yield from process_table_page(table_name, page_bytes, page_reader)
-
         def process_table_page(table_name, page_bytes, page_reader):
+
+            def type_length(serial_type):
+                return \
+                    1 if serial_type == 1 else \
+                    int((serial_type - 12)/2) if serial_type >= 12 and serial_type % 2 == 0 else \
+                    int((serial_type - 13)/2) if serial_type >= 13 and serial_type % 2 == 1 else \
+                    None
+
+            def parse_serial_value(serial_type, raw):
+                return \
+                    signed_char.unpack(raw)[0] if serial_type == 1 else \
+                    raw
+
+            def yield_leaf_table_cells(page_bytes, pointers):
+                for pointer in pointers:
+                    cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
+
+                    payload_size, _ = cell_varint_reader()
+                    rowid, _ = cell_varint_reader()
+
+                    header_remaining, header_varint_size = cell_varint_reader()
+                    header_remaining -= header_varint_size
+
+                    serial_types = []
+                    while header_remaining:
+                        h, v_size = cell_varint_reader()
+                        serial_types.append(h)
+                        header_remaining -= v_size
+
+                    yield [
+                        parse_serial_value(serial_type, cell_num_reader(type_length(serial_type)))
+                        for serial_type in serial_types
+                    ]
+
+            def yield_interior_table_cells(page_bytes, pointers):
+                for pointer in pointers:
+                    cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
+                    page_number, =  unsigned_long.unpack(cell_num_reader(4))
+                    yield page_number
+
+            def get_master_table(master_cells):
+
+                def schema(cur, table_name, sql):
+                    cur.execute(sql)
+                    cur.execute("PRAGMA table_info('" + table_name + "');")
+                    rows = cur.fetchall()
+                    cols = [d[0] for d in cur.description]
+                    return [{col: row[i] for i, col in enumerate(cols)} for row in rows]
+
+                with connect(':memory:') as con:
+                    cur = con.cursor()
+
+                    return [
+                        {
+                            'name': cell[1].decode(),
+                            'info': schema(cur, cell[1].decode(), cell[4].decode()),
+                            'root_page': cell[3],
+                        }
+                        for cell in master_cells
+                        if cell[0] == b'table'
+                    ]
+
+            def process_if_buffered_or_remember(table_name, page_num):
+                try:
+                    page_bytes, page_reader = page_buffer.pop(page_num)
+                except KeyError:
+                    page_types[page_num] = ('table', table_name)
+                else:
+                    yield from process_table_page(table_name, page_bytes, page_reader)
+
             page_type = page_reader(1)
             first_free_block, num_cells, cell_content_start, num_frag_free = \
                 table_header.unpack(page_reader(7))
