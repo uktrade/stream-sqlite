@@ -101,8 +101,8 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             yield page_num, page_bytes, page_reader
 
     def yield_tables(page_nums_pages_readers):
-        cached_pages = {}
-        known_table_pages = {
+        page_buffer = {}
+        page_tables = {
             1: 'sqlite_schema',
         }
         master_table = {}
@@ -169,13 +169,13 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                     if cell[0] == b'table'
                 ]
 
-        def cache_or_process(table_name, page_num):
+        def process_if_buffered_or_remember(table_name, page_num):
             try:
-                cached_page_bytes, cached_page_reader = cached_pages.pop(page_num)
+                page_bytes, page_reader = page_buffer.pop(page_num)
             except KeyError:
-                known_table_pages[page_num] = table_name
+                page_tables[page_num] = table_name
             else:
-                yield from process_table_page(table_name, cached_page_bytes, cached_page_reader)
+                yield from process_table_page(table_name, page_bytes, page_reader)
 
         def process_table_page(table_name, page_bytes, page_reader):
             page_type = page_reader(1)
@@ -191,7 +191,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             if page_type == LEAF_TABLE and table_name == 'sqlite_schema':
                 for row in get_master_table(yield_leaf_table_cells(page_bytes, pointers)):
                     master_table[row['name']] = row['info']
-                    yield from cache_or_process(row['name'], row['root_page'])
+                    yield from process_if_buffered_or_remember(row['name'], row['root_page'])
 
             elif page_type == LEAF_TABLE:
                 table_info = master_table[table_name]
@@ -205,17 +205,17 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
             elif page_type == INTERIOR_TABLE:
                 for page_num in yield_interior_table_cells(page_bytes, pointers):
-                    yield from cache_or_process(table_name, page_num)
-                yield from cache_or_process(table_name, right_most_pointer)
+                    yield from process_if_buffered_or_remember(table_name, page_num)
+                yield from process_if_buffered_or_remember(table_name, right_most_pointer)
 
             else:
                 raise Exception('Unhandled page type')
 
         for page_num, page_bytes, page_reader in page_nums_pages_readers:
             try:
-                table_name = known_table_pages.pop(page_num)
+                table_name = page_tables.pop(page_num)
             except KeyError:
-                cached_pages[page_num] = (page_bytes, page_reader)
+                page_buffer[page_num] = (page_bytes, page_reader)
             else:
                 yield from process_table_page(table_name, page_bytes, page_reader)
 
