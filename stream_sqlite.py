@@ -1,3 +1,4 @@
+from functools import partial
 from itertools import groupby
 from struct import Struct, unpack
 from sqlite3 import connect
@@ -101,10 +102,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
     def yield_table_pages(page_nums_pages_readers, first_freelist_trunk_page):
         page_buffer = {}
-        page_types = {
-            1: ('table', 'sqlite_schema'),
-            first_freelist_trunk_page: ('freelist-trunk', None),
-        }
+        page_types = {}
         master_table = {}
 
         def process_table_page(table_name, page_bytes, page_reader):
@@ -174,7 +172,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                 try:
                     page_bytes, page_reader = page_buffer.pop(page_num)
                 except KeyError:
-                    page_types[page_num] = ('table', table_name)
+                    page_types[page_num] = partial(process_table_page, table_name)
                 else:
                     yield from process_table_page(table_name, page_bytes, page_reader)
 
@@ -216,7 +214,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                 try:
                     page_bytes, page_reader = page_buffer.pop(page_num)
                 except KeyError:
-                    page_types[page_num] = ('freelist-trunk', None)
+                    page_types[page_num] = process_freelist_trunk_page
                 else:
                     yield from process_freelist_trunk_page(page_bytes, page_reader)
 
@@ -224,7 +222,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                 try:
                     del page_buffer[page_num]
                 except KeyError:
-                    page_types[page_num] = ('freelist-leaf', None)
+                    page_types[page_num] = process_freelist_leaf_page
 
             next_trunk, num_leaves = freelist_trunk_header.unpack(page_reader(8))
             leaf_pages = unpack('>{}L'.format(num_leaves), page_reader(num_leaves * 4))
@@ -235,16 +233,19 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             if next_trunk != 0:
                 yield from trunk_process_if_buffered_or_remember(next_trunk)
 
+        def process_freelist_leaf_page(page_bytes, page_reader):
+            yield from []
+
+        page_types[1] = partial(process_table_page, 'sqlite_schema')
+        page_types[first_freelist_trunk_page] = process_freelist_trunk_page
+
         for page_num, page_bytes, page_reader in page_nums_pages_readers:
             try:
-                page_type, table_name = page_types.pop(page_num)
+                process_page = page_types.pop(page_num)
             except KeyError:
                 page_buffer[page_num] = (page_bytes, page_reader)
             else:
-                if page_type == 'table':
-                    yield from process_table_page(table_name, page_bytes, page_reader)
-                elif page_type == 'freelist-trunk':
-                    yield from process_freelist_trunk_page(page_bytes, page_reader)
+                yield from process_page(page_bytes, page_reader)
 
         if len(page_buffer) != 0:
             print(len(page_buffer))
