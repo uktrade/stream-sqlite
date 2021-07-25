@@ -189,13 +189,13 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
             elif page_type == LEAF_TABLE:
                 table_info = master_table[table_name]
-                yield table_name, table_info, [
+                yield table_name, table_info, (
                     {
                         table_info[i]['name']: value
                         for i, value in enumerate(cell)
                     }
                     for cell in yield_leaf_table_cells(page_bytes, pointers)
-                ]
+                )
 
             elif page_type == INTERIOR_TABLE:
                 for page_num in yield_interior_table_cells(page_bytes, pointers):
