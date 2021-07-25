@@ -99,8 +99,8 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
     def yield_table_pages(page_nums_pages_readers):
         page_buffer = {}
-        page_tables = {
-            1: 'sqlite_schema',
+        page_types = {
+            1: ('table', 'sqlite_schema'),
         }
         master_table = {}
 
@@ -169,7 +169,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             try:
                 page_bytes, page_reader = page_buffer.pop(page_num)
             except KeyError:
-                page_tables[page_num] = table_name
+                page_types[page_num] = ('table', table_name)
             else:
                 yield from process_table_page(table_name, page_bytes, page_reader)
 
@@ -209,7 +209,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
         for page_num, page_bytes, page_reader in page_nums_pages_readers:
             try:
-                table_name = page_tables.pop(page_num)
+                _, table_name = page_types.pop(page_num)
             except KeyError:
                 page_buffer[page_num] = (page_bytes, page_reader)
             else:
