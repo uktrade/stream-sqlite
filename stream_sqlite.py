@@ -13,6 +13,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
     unsigned_short = Struct('>H')
     unsigned_long = Struct('>L')
     table_header = Struct('>HHHB')
+    freelist_trunk_header = Struct('>LL')
 
     def get_byte_reader(iterable):
         chunk = b''
@@ -81,8 +82,9 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         page_size, = unsigned_short.unpack(header[16:18])
         page_size = 65536 if page_size == 1 else page_size
         num_pages_expected, = unsigned_long.unpack(header[28:32])
+        first_freelist_trunk_page, = unsigned_long.unpack(header[32:36])
 
-        return page_size, num_pages_expected
+        return page_size, num_pages_expected, first_freelist_trunk_page
 
     def yield_page_nums_pages_readers(get_bytes, page_size, num_pages_expected):
         page_bytes = bytes(100) + get_bytes(page_size - 100)
@@ -97,10 +99,11 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
             yield page_num, page_bytes, page_reader
 
-    def yield_table_pages(page_nums_pages_readers):
+    def yield_table_pages(page_nums_pages_readers, first_freelist_trunk_page):
         page_buffer = {}
         page_types = {
             1: ('table', 'sqlite_schema'),
+            first_freelist_trunk_page: ('freelist-trunk', None),
         }
         master_table = {}
 
@@ -207,13 +210,40 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             else:
                 raise ValueError('Unhandled page type in SQLite stream')
 
+        def process_freelist_trunk_page(page_bytes, page_reader):
+            def trunk_process_if_buffered_or_remember(page_num):
+                try:
+                    page_bytes, page_reader = page_buffer.pop(page_num)
+                except KeyError:
+                    page_types[page_num] = ('freelist-trunk', None)
+                else:
+                    process_freelist_trunk_page(page_bytes, page_reader)
+
+            def leaf_process_if_buffered_or_remember(page_num):
+                try:
+                    del page_buffer[page_num]
+                except KeyError:
+                    page_types[page_num] = ('freelist-leaf', None)
+
+            next_trunk, num_leaves = freelist_trunk_header.unpack(page_reader(8))
+            leaf_pages = unpack('>{}H'.format(num_leaves), page_reader(num_leaves * 2))
+
+            for page_num in leaf_pages:
+                leaf_process_if_buffered_or_remember(page_num)
+
+            if next_trunk != 0:
+                trunk_process_if_buffered_or_remember(next_trunk)
+
         for page_num, page_bytes, page_reader in page_nums_pages_readers:
             try:
-                _, table_name = page_types.pop(page_num)
+                page_type, table_name = page_types.pop(page_num)
             except KeyError:
                 page_buffer[page_num] = (page_bytes, page_reader)
             else:
-                yield from process_table_page(table_name, page_bytes, page_reader)
+                if page_type == 'table':
+                    yield from process_table_page(table_name, page_bytes, page_reader)
+                elif page_type == 'freelist-trunk':
+                    process_freelist_trunk_page(page_bytes, page_reader)
 
     def group_by_table(table_pages):
         grouped_by_name = groupby(
@@ -227,8 +257,8 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             yield name, info, _rows(single_table_pages)
 
     get_bytes = get_byte_reader(sqlite_chunks)
-    page_size, num_pages_expected = parse_header(get_bytes(100))
+    page_size, num_pages_expected, first_freelist_trunk_page = parse_header(get_bytes(100))
 
     page_nums_pages_readers = yield_page_nums_pages_readers(get_bytes, page_size, num_pages_expected)
-    table_pages = yield_table_pages(page_nums_pages_readers)
+    table_pages = yield_table_pages(page_nums_pages_readers, first_freelist_trunk_page)
     yield from group_by_table(table_pages)

@@ -77,6 +77,20 @@ class TestStreamSqlite(unittest.TestCase):
                     all_chunks[0][2],
                 )
 
+    def test_freelist(self):
+        for chunk_size in [1, 2, 3, 5, 7, 32, 131072]:
+            with self.subTest(chunk_size=chunk_size):
+                sqls = [
+                    "CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);",
+                ] + [
+                    "INSERT INTO my_table_1 VALUES ('some-text-a', 'some-text-b')",
+                ] * 1000 + [
+                    "DELETE FROM my_table_1",
+                ]
+                all_chunks = tables_list(stream_sqlite(db(sqls, chunk_size)))
+
+                self.assertEqual([], all_chunks[0][2])
+
 def db(sqls, chunk_size):
     with tempfile.NamedTemporaryFile() as fp:
         with sqlite3.connect(fp.name, isolation_level=None) as con:
