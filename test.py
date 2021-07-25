@@ -81,7 +81,7 @@ class TestStreamSqlite(unittest.TestCase):
         sqls = [
             "CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);",
         ] + [
-            "INSERT INTO my_table_1 VALUES " + ','.join(["('some-text-a', 'some-text-b')"] * 1000000),
+            "INSERT INTO my_table_1 VALUES " + ','.join(["('some-text-a', 'some-text-b')"] * 500000),
         ] + [
             "DELETE FROM my_table_1",
         ]
