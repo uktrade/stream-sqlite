@@ -110,10 +110,9 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                 None
 
         def parse_serial_value(serial_type, raw):
-            if serial_type == 1:
-                return signed_char.unpack(raw)[0]
-            else:
-                return raw
+            return \
+                signed_char.unpack(raw)[0] if serial_type == 1 else \
+                raw
 
         def yield_leaf_table_cells(page_bytes, pointers):
             for pointer in pointers:
