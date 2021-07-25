@@ -91,17 +91,16 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         else:
             return raw
 
-    get_bytes = get_byte_reader(sqlite_chunks)
-    header = get_bytes(100)
+    def yield_page_nums_pages_readers(get_bytes):
+        header = get_bytes(100)
 
-    if header[:16] != b'SQLite format 3\0':
-        raise ValueError('SQLite header not found at start of stream')
+        if header[:16] != b'SQLite format 3\0':
+            raise ValueError('SQLite header not found at start of stream')
 
-    page_size, = unsigned_short.unpack(header[16:18])
-    page_size = 65536 if page_size == 1 else page_size
-    num_pages_expected, = unsigned_long.unpack(header[28:32])
+        page_size, = unsigned_short.unpack(header[16:18])
+        page_size = 65536 if page_size == 1 else page_size
+        num_pages_expected, = unsigned_long.unpack(header[28:32])
 
-    def yield_page_nums_pages_readers(page_size, num_pages_expected):
         page_bytes = header + get_bytes(page_size - 100)
         page_reader, _ = get_chunk_readers(page_bytes)
         page_reader(100)
@@ -220,5 +219,6 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             else:
                 yield from process_table_page(table_name, page_bytes, page_reader)
 
-    page_nums_pages_readers = yield_page_nums_pages_readers(page_size, num_pages_expected)
+    get_bytes = get_byte_reader(sqlite_chunks)
+    page_nums_pages_readers = yield_page_nums_pages_readers(get_bytes)
     yield from yield_tables(page_nums_pages_readers)
