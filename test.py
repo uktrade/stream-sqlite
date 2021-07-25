@@ -81,8 +81,8 @@ class TestStreamSqlite(unittest.TestCase):
         sqls = [
             "CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);",
         ] + [
-            "INSERT INTO my_table_1 VALUES " + ','.join(["('some-text-a', 'some-text-b')"] * 500000),
-        ] + [
+            "INSERT INTO my_table_1 VALUES " + ','.join(["('some-text-a', 'some-text-b')"] * 5000),
+        ] * 1000 + [
             "DELETE FROM my_table_1",
         ]
         all_chunks = tables_list(stream_sqlite(db(sqls, chunk_size=131072)))
