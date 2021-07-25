@@ -227,7 +227,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                     page_types[page_num] = ('freelist-leaf', None)
 
             next_trunk, num_leaves = freelist_trunk_header.unpack(page_reader(8))
-            leaf_pages = unpack('>{}H'.format(num_leaves), page_reader(num_leaves * 2))
+            leaf_pages = unpack('>{}L'.format(num_leaves), page_reader(num_leaves * 4))
 
             for page_num in leaf_pages:
                 leaf_process_if_buffered_or_remember(page_num)
@@ -245,6 +245,9 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                     yield from process_table_page(table_name, page_bytes, page_reader)
                 elif page_type == 'freelist-trunk':
                     process_freelist_trunk_page(page_bytes, page_reader)
+
+        if len(page_buffer) != 0:
+            raise ValueError('Unidentified pages in buffer')
 
     def group_by_table(table_pages):
         grouped_by_name = groupby(
