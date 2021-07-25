@@ -248,7 +248,6 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                 yield from process_page(page_bytes, page_reader)
 
         if len(page_buffer) != 0:
-            print(len(page_buffer))
             raise ValueError('Unidentified pages in buffer')
 
     def group_by_table(table_pages):
