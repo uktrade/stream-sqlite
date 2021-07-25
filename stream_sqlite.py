@@ -27,7 +27,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                     try:
                         chunk = next(it)
                     except StopIteration:
-                        raise ValueError('Fewer bytes than expected in SQLite file') from None
+                        raise ValueError('Fewer bytes than expected in SQLite stream') from None
                 prev_offset = offset
                 prev_chunk = chunk
                 to_yield = min(num, len(chunk) - offset, chunk_size)
@@ -204,7 +204,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                 yield from process_if_buffered_or_remember(table_name, right_most_pointer)
 
             else:
-                raise ValueError('Unhandled page type')
+                raise ValueError('Unhandled page type in SQLite stream')
 
         for page_num, page_bytes, page_reader in page_nums_pages_readers:
             try:
