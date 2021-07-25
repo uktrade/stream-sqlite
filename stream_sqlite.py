@@ -11,6 +11,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
     signed_char = Struct('b')
     unsigned_short = Struct('>H')
     unsigned_long = Struct('>L')
+    table_header = Struct('>HHHB')
 
     def get_byte_readers(iterable):
         # Return functions to return bytes from the iterable
@@ -198,7 +199,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         def process_table_page(table_name, page_bytes, page_reader):
             page_type = page_reader(1)
             first_free_block, num_cells, cell_content_start, num_frag_free = \
-                Struct('>HHHB').unpack(page_reader(7))
+                table_header.unpack(page_reader(7))
             cell_content_start = 65536 if cell_content_start == 0 else cell_content_start
             right_most_pointer, = \
                 unsigned_long.unpack(page_reader(4)) if page_type == INTERIOR_TABLE else \
