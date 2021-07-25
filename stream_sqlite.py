@@ -120,7 +120,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             else:
                 return raw
 
-        def _yield_leaf_table_cells(page_bytes, pointers):
+        def yield_leaf_table_cells(page_bytes, pointers):
             for pointer in pointers:
                 cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
 
@@ -141,13 +141,13 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                     for serial_type in serial_types
                 ]
 
-        def _yield_interior_table_cells(page_bytes, pointers):
+        def yield_interior_table_cells(page_bytes, pointers):
             for pointer in pointers:
                 cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
                 page_number, =  unsigned_long.unpack(cell_num_reader(4))
                 yield page_number
 
-        def _get_master_table(master_cells):
+        def get_master_table(master_cells):
 
             def schema(cur, table_name, sql):
                 cur.execute(sql)
@@ -189,7 +189,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             pointers = unpack('>{}H'.format(num_cells), page_reader(num_cells * 2))
 
             if page_type == LEAF_TABLE and table_name == 'sqlite_schema':
-                for row in _get_master_table(_yield_leaf_table_cells(page_bytes, pointers)):
+                for row in get_master_table(yield_leaf_table_cells(page_bytes, pointers)):
                     master_table[row['name']] = row['info']
                     yield from cache_or_process(row['name'], row['root_page'])
 
@@ -200,11 +200,11 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                         table_info[i]['name']: value
                         for i, value in enumerate(cell)
                     }
-                    for cell in _yield_leaf_table_cells(page_bytes, pointers)
+                    for cell in yield_leaf_table_cells(page_bytes, pointers)
                 ]
 
             elif page_type == INTERIOR_TABLE:
-                for page_num in _yield_interior_table_cells(page_bytes, pointers):
+                for page_num in yield_interior_table_cells(page_bytes, pointers):
                     yield from cache_or_process(table_name, page_num)
                 yield from cache_or_process(table_name, right_most_pointer)
 
