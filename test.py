@@ -71,11 +71,10 @@ class TestStreamSqlite(unittest.TestCase):
                     "INSERT INTO my_table_1 VALUES ('some-text-a', 'some-text-b')",
                 ] * 1000
                 all_chunks = tables_list(stream_sqlite(db(sqls, chunk_size)))
-                all_rows = flatten([chunk[2] for chunk in all_chunks])
 
                 self.assertEqual(
                     [{'my_text_col_a': b'some-text-a', 'my_text_col_b': b'some-text-b'}] * 1000,
-                    all_rows,
+                    all_chunks[0][2],
                 )
 
 def db(sqls, chunk_size):
@@ -96,11 +95,4 @@ def tables_list(table_iter):
     return [
         (table_name, table_info, list(table_rows))
         for table_name, table_info, table_rows in table_iter
-    ]
-
-def flatten(l):
-    return [
-        item
-        for sublist in l
-        for item in sublist
     ]

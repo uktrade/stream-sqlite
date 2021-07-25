@@ -1,3 +1,4 @@
+from itertools import groupby
 from struct import Struct, unpack
 from sqlite3 import connect
 
@@ -95,7 +96,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
             yield page_num, page_bytes, page_reader
 
-    def yield_tables(page_nums_pages_readers):
+    def yield_table_pages(page_nums_pages_readers):
         page_buffer = {}
         page_tables = {
             1: 'sqlite_schema',
@@ -213,6 +214,18 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             else:
                 yield from process_table_page(table_name, page_bytes, page_reader)
 
+    def group_by_table(table_pages):
+        grouped_by_name = groupby(
+            table_pages, key=lambda name_info_pages: (name_info_pages[0], name_info_pages[1]))
+
+        def _rows(single_table_pages):
+            for _, _, table_rows in single_table_pages:
+                yield from table_rows
+
+        for (name, info), single_table_pages in grouped_by_name:
+            yield name, info, _rows(single_table_pages)
+
     get_bytes = get_byte_reader(sqlite_chunks)
     page_nums_pages_readers = yield_page_nums_pages_readers(get_bytes)
-    yield from yield_tables(page_nums_pages_readers)
+    table_pages = yield_table_pages(page_nums_pages_readers)
+    yield from group_by_table(table_pages)
