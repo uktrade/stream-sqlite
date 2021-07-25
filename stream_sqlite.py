@@ -14,11 +14,6 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
     table_header = Struct('>HHHB')
 
     def get_byte_reader(iterable):
-        # Return functions to return bytes from the iterable
-        # - _yield_all: yields chunks as they come up (often for a "body")
-        # - _yield_num: yields chunks as the come up, up to a fixed number of bytes
-        # - _get_num: returns a single `bytes` of a given length
-
         chunk = b''
         offset = 0
         it = iter(iterable)
