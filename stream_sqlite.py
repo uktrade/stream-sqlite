@@ -61,7 +61,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         def _get_num(num):
             return b''.join(chunk for chunk in _yield_num(num))
 
-        return _yield_all, _yield_num, _get_num
+        return _yield_all, _get_num
 
     def get_chunk_readers(chunk, p=0):
         # Set of functions to read a chunk of bytes, which it itself made of
@@ -108,7 +108,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         else:
             return raw
 
-    yield_all, yield_num, get_num = get_byte_readers(sqlite_chunks)
+    yield_all, get_num = get_byte_readers(sqlite_chunks)
 
     header = get_num(100)
 
