@@ -1,4 +1,4 @@
-from struct import Struct
+from struct import Struct, unpack
 import sqlite3
 
 
@@ -204,7 +204,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                 unsigned_long.unpack(page_reader(4)) if page_type == INTERIOR_TABLE else \
                 (None,)
 
-            pointers = Struct('>{}H'.format(num_cells)).unpack(page_reader(num_cells * 2))
+            pointers = unpack('>{}H'.format(num_cells), page_reader(num_cells * 2))
 
             if page_type == LEAF_TABLE and table_name == 'sqlite_schema':
                 for row in _get_master_table(_yield_leaf_table_cells(page_bytes, pointers)):
