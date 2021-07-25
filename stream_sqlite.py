@@ -91,9 +91,8 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         else:
             return raw
 
-    get_num = get_byte_reader(sqlite_chunks)
-
-    header = get_num(100)
+    get_bytes = get_byte_reader(sqlite_chunks)
+    header = get_bytes(100)
 
     if header[:16] != b'SQLite format 3\0':
         raise ValueError('SQLite header not found at start of stream')
@@ -103,14 +102,14 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
     num_pages_expected, = unsigned_long.unpack(header[28:32])
 
     def yield_page_nums_pages_readers(page_size, num_pages_expected):
-        page_bytes = header + get_num(page_size - 100)
+        page_bytes = header + get_bytes(page_size - 100)
         page_reader, _ = get_chunk_readers(page_bytes)
         page_reader(100)
 
         yield 1, page_bytes, page_reader
 
         for page_num in range(2, num_pages_expected + 1):
-            page_bytes = get_num(page_size)
+            page_bytes = get_bytes(page_size)
             page_reader, _ = get_chunk_readers(page_bytes)
 
             yield page_num, page_bytes, page_reader
