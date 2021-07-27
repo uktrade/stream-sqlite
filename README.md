@@ -12,7 +12,7 @@ def sqlite_bytes():
     with httpx.stream('GET', 'https://www.example.com/my.sqlite') as r:
         yield from r.iter_bytes(chunk_size=65536)
 
-# A table is not guarenteed to be contiguous in a sqlite file, so can appear
+# A table is not guaranteed to be contiguous in a sqlite file, so can appear
 # multiple times while iterating
 for table_name, table_info, rows in stream_sqlite(sqlite_bytes()):
     for row in rows:
