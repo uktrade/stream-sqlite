@@ -105,19 +105,35 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         page_types = {}
         master_table = {}
 
+        def get_int(raw):
+            return int.from_bytes(raw, byteorder='big', signed=True)
+
+        def get_none(_):
+            return None
+
+        def identity(raw):
+            return raw
+
+        integer_serial_types = {
+            1: (1, get_int),
+            2: (2, get_int),
+            3: (3, get_int),
+            4: (4, get_int),
+            5: (6, get_int),
+            6: (8, get_int),
+            8: (0, lambda _: 0),
+            9: (0, lambda _: 1),
+        }
+
         def process_table_page(table_name, page_bytes, page_reader):
 
-            def type_length(serial_type):
+            def get_length_parser(serial_type):
                 return \
-                    1 if serial_type == 1 else \
-                    int((serial_type - 12)/2) if serial_type >= 12 and serial_type % 2 == 0 else \
-                    int((serial_type - 13)/2) if serial_type >= 13 and serial_type % 2 == 1 else \
+                    (0, get_none) if serial_type == 0 else \
+                    integer_serial_types[serial_type] if serial_type < 12 else \
+                    (int((serial_type - 12)/2), identity) if serial_type % 2 == 0 else \
+                    (int((serial_type - 13)/2), identity) if serial_type % 2 == 1 else \
                     None
-
-            def parse_serial_value(serial_type, raw):
-                return \
-                    signed_char.unpack(raw)[0] if serial_type == 1 else \
-                    raw
 
             def yield_leaf_table_cells(page_bytes, pointers):
                 for pointer in pointers:
@@ -136,8 +152,9 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                         header_remaining -= v_size
 
                     yield [
-                        parse_serial_value(serial_type, cell_num_reader(type_length(serial_type)))
+                        parser(cell_num_reader(length))
                         for serial_type in serial_types
+                        for (length, parser) in [get_length_parser(serial_type)]
                     ]
 
             def yield_interior_table_cells(page_bytes, pointers):

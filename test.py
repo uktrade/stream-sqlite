@@ -38,6 +38,41 @@ class TestStreamSqlite(unittest.TestCase):
                     [],
                 )], all_chunks)
 
+    def test_integers(self):
+        for chunk_size in [1, 2, 3, 5, 7, 32, 131072]:
+            with self.subTest(chunk_size=chunk_size):
+                sqls = [
+                    "CREATE TABLE my_table_1 (my_text_col_a integer);",
+                    "INSERT INTO my_table_1 VALUES (0),(1),(2),(65536),(16777216),(4294967296),(1099511627776),(281474976710656),(72057594037927936)",
+                    "INSERT INTO my_table_1 VALUES (0),(-1),(-2),(-65536),(-16777216),(-4294967296),(-1099511627776),(-281474976710656),(-72057594037927936)",
+                ]
+                all_chunks = tables_list(stream_sqlite(db(sqls, chunk_size)))
+                self.assertEqual([(
+                    'my_table_1',
+                    [
+                        {'cid': 0, 'name': 'my_text_col_a', 'type': 'integer', 'notnull': 0, 'dflt_value': None, 'pk': 0},
+                    ],
+                    [
+                        {'my_text_col_a': 0},
+                        {'my_text_col_a': 1},
+                        {'my_text_col_a': 2},
+                        {'my_text_col_a': 65536},
+                        {'my_text_col_a': 16777216},
+                        {'my_text_col_a': 4294967296},
+                        {'my_text_col_a': 1099511627776},
+                        {'my_text_col_a': 281474976710656},
+                        {'my_text_col_a': 72057594037927936},
+                        {'my_text_col_a': 0},
+                        {'my_text_col_a': -1},
+                        {'my_text_col_a': -2},
+                        {'my_text_col_a': -65536},
+                        {'my_text_col_a': -16777216},
+                        {'my_text_col_a': -4294967296},
+                        {'my_text_col_a': -1099511627776},
+                        {'my_text_col_a': -281474976710656},
+                        {'my_text_col_a': -72057594037927936}]
+                )], all_chunks)
+
     def test_many_small_tables(self):
         for chunk_size in [1, 2, 3, 5, 7, 32, 131072]:
             with self.subTest(chunk_size=chunk_size):
