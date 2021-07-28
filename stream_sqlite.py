@@ -10,7 +10,6 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
     LEAF_INDEX = b'\x0a'
     LEAF_TABLE = b'\x0d'
 
-    signed_char = Struct('b')
     unsigned_short = Struct('>H')
     unsigned_long = Struct('>L')
     table_header = Struct('>HHHB')
