@@ -105,7 +105,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         master_table = {}
 
         def process_table_page(table_name, page_bytes, page_reader):
-    
+
             def yield_leaf_table_cells(page_bytes, pointers):
                 for pointer in pointers:
                     cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
