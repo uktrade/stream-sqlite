@@ -107,6 +107,13 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         def process_table_page(table_name, page_bytes, page_reader):
 
             def yield_leaf_table_cells(page_bytes, pointers):
+
+                def serial_types(header_remaining, cell_varint_reader):
+                    while header_remaining:
+                        h, v_size = cell_varint_reader()
+                        yield h
+                        header_remaining -= v_size
+
                 for pointer in pointers:
                     cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
 
@@ -116,16 +123,10 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                     header_remaining, header_varint_size = cell_varint_reader()
                     header_remaining -= header_varint_size
 
-                    serial_types = []
-                    while header_remaining:
-                        h, v_size = cell_varint_reader()
-                        serial_types.append(h)
-                        header_remaining -= v_size
-
-                    yield [
+                    yield tuple(
                         parser(cell_num_reader(length))
-                        for serial_type in serial_types
-                        for (length, parser) in [
+                        for serial_type in tuple(serial_types(header_remaining, cell_varint_reader))
+                        for (length, parser) in (
                             (0, lambda _: None) if serial_type == 0 else \
                             (1, lambda raw: int.from_bytes(raw, byteorder='big', signed=True)) if serial_type == 1 else \
                             (2, lambda raw: int.from_bytes(raw, byteorder='big', signed=True)) if serial_type == 2 else \
@@ -137,9 +138,9 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                             (0, lambda _: 1) if serial_type == 9 else \
                             (int((serial_type - 12)/2), lambda raw: raw) if serial_type % 2 == 0 else \
                             (int((serial_type - 13)/2), lambda raw: raw) if serial_type % 2 == 1 else \
-                            None
-                        ]
-                    ]
+                            (None, None),
+                        )
+                    )
 
             def yield_interior_table_cells(page_bytes, pointers):
                 for pointer in pointers:
