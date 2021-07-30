@@ -142,7 +142,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                             (0, lambda _: 0) if serial_type == 8 else \
                             (0, lambda _: 1) if serial_type == 9 else \
                             (int((serial_type - 12)/2), lambda raw: raw) if serial_type % 2 == 0 else \
-                            (int((serial_type - 13)/2), lambda raw: raw) if serial_type % 2 == 1 else \
+                            (int((serial_type - 13)/2), lambda raw: raw.decode()) if serial_type % 2 == 1 else \
                             (None, None),
                         )
                     )
@@ -154,7 +154,6 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                     yield page_number
 
             def get_master_table(master_cells):
-
                 def schema(cur, table_name, sql):
                     cur.execute(sql)
                     cur.execute("PRAGMA table_info('" + table_name.replace("'","''") + "');")
@@ -167,12 +166,12 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
                     return tuple(
                         {
-                            'name': cell[1].decode(),
-                            'info': schema(cur, cell[1].decode(), cell[4].decode()),
+                            'name': cell[1],
+                            'info': schema(cur, cell[1], cell[4]),
                             'root_page': cell[3],
                         }
                         for cell in master_cells
-                        if cell[0] == b'table'
+                        if cell[0] == 'table'
                     )
 
             def process_if_buffered_or_remember(table_name, page_num):

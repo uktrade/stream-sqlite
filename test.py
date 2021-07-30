@@ -28,7 +28,7 @@ class TestStreamSqlite(unittest.TestCase):
                         {'cid': 0, 'name': 'my_text_col_a', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
                         {'cid': 1, 'name': 'my_text_col_b', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
                     ),
-                    [{'my_text_col_a': b'some-text-a', 'my_text_col_b': b'some-text-b'}],
+                    [{'my_text_col_a': 'some-text-a', 'my_text_col_b': 'some-text-b'}],
                 ),(
                     "my_table_'2",
                     (
@@ -87,7 +87,7 @@ class TestStreamSqlite(unittest.TestCase):
                         {'cid': 0, 'name': 'my_text_col_a', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
                         {'cid': 1, 'name': 'my_text_col_b', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
                     ),
-                    [{'my_text_col_a': b'some-text-a', 'my_text_col_b': b'some-text-b'}],
+                    [{'my_text_col_a': 'some-text-a', 'my_text_col_b': 'some-text-b'}],
                 )] + [(
                     'my_table_{}'.format(i),
                     (
@@ -108,7 +108,7 @@ class TestStreamSqlite(unittest.TestCase):
                 all_chunks = tables_list(stream_sqlite(db(sqls, chunk_size)))
 
                 self.assertEqual(
-                    [{'my_text_col_a': b'some-text-a', 'my_text_col_b': b'some-text-b'}] * 1000,
+                    [{'my_text_col_a': 'some-text-a', 'my_text_col_b': 'some-text-b'}] * 1000,
                     all_chunks[0][2],
                 )
 
