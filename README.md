@@ -21,9 +21,8 @@ def sqlite_bytes():
     with httpx.stream('GET', 'https://www.example.com/my.sqlite') as r:
         yield from r.iter_bytes(chunk_size=65536)
 
-# A table is not guaranteed to be contiguous in a sqlite file, so can appear
-# multiple times while iterating. However, if there is a single table in the
-# file, there will be exactly one iteration of the outer loop
+# If there is a single table in the file, there will be exactly one iteration of the outer loop.
+# If there are multiple tables, each can appear multiple times.
 for table_name, table_info, rows in stream_sqlite(sqlite_bytes()):
     # Output of PRAGMA table_info
     print(table_info)
