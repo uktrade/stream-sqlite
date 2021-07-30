@@ -79,6 +79,11 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
         if header[:16] != b'SQLite format 3\0':
             raise ValueError('SQLite header not found at start of stream')
 
+        encoding, = unsigned_long.unpack(header[56:60])
+        # 0 if the database is empty. This is not documented at https://www.sqlite.org/fileformat.html
+        if encoding not in (0, 1):
+            raise ValueError('Unsupported encoding')
+
         page_size, = unsigned_short.unpack(header[16:18])
         page_size = 65536 if page_size == 1 else page_size
         num_pages_expected, = unsigned_long.unpack(header[28:32])
