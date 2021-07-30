@@ -24,17 +24,17 @@ class TestStreamSqlite(unittest.TestCase):
                 all_chunks = tables_list(stream_sqlite(db(sqls, chunk_size)))
                 self.assertEqual([(
                     'my_table_1',
-                    [
+                    (
                         {'cid': 0, 'name': 'my_text_col_a', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
                         {'cid': 1, 'name': 'my_text_col_b', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
-                    ],
+                    ),
                     [{'my_text_col_a': b'some-text-a', 'my_text_col_b': b'some-text-b'}],
                 ),(
                     'my_table_2',
-                    [
+                    (
                         {'cid': 0, 'name': 'my_text_col_a', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
                         {'cid': 1, 'name': 'my_text_col_b', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
-                    ],
+                    ),
                     [],
                 )], all_chunks)
 
@@ -49,9 +49,9 @@ class TestStreamSqlite(unittest.TestCase):
                 all_chunks = tables_list(stream_sqlite(db(sqls, chunk_size)))
                 self.assertEqual([(
                     'my_table_1',
-                    [
+                    (
                         {'cid': 0, 'name': 'my_text_col_a', 'type': 'integer', 'notnull': 0, 'dflt_value': None, 'pk': 0},
-                    ],
+                    ),
                     [
                         {'my_text_col_a': 0},
                         {'my_text_col_a': 1},
@@ -83,17 +83,17 @@ class TestStreamSqlite(unittest.TestCase):
                 all_chunks = tables_list(stream_sqlite(db(sqls, chunk_size)))
                 self.assertEqual([(
                     'my_table_1',
-                    [
+                    (
                         {'cid': 0, 'name': 'my_text_col_a', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
                         {'cid': 1, 'name': 'my_text_col_b', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
-                    ],
+                    ),
                     [{'my_text_col_a': b'some-text-a', 'my_text_col_b': b'some-text-b'}],
                 )] + [(
                     'my_table_{}'.format(i),
-                    [
+                    (
                         {'cid': 0, 'name': 'my_text_col_a', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
                         {'cid': 1, 'name': 'my_text_col_b', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
-                    ],
+                    ),
                     [],
                 ) for i in range(2, 101)], all_chunks)
 

@@ -155,12 +155,12 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                     cur.execute("PRAGMA table_info('" + table_name + "');")
                     rows = cur.fetchall()
                     cols = [d[0] for d in cur.description]
-                    return [{col: row[i] for i, col in enumerate(cols)} for row in rows]
+                    return tuple({col: row[i] for i, col in enumerate(cols)} for row in rows)
 
                 with connect(':memory:') as con:
                     cur = con.cursor()
 
-                    return [
+                    return tuple(
                         {
                             'name': cell[1].decode(),
                             'info': schema(cur, cell[1].decode(), cell[4].decode()),
@@ -168,7 +168,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                         }
                         for cell in master_cells
                         if cell[0] == b'table'
-                    ]
+                    )
 
             def process_if_buffered_or_remember(table_name, page_num):
                 try:
