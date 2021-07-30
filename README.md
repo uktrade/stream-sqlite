@@ -16,8 +16,8 @@ pip install stream-sqlite
 from stream_sqlite import stream_sqlite
 import httpx
 
+# Iterable that yields the bytes of a sqlite file
 def sqlite_bytes():
-    # Iterable that yields the bytes of a sqlite file
     with httpx.stream('GET', 'https://www.example.com/my.sqlite') as r:
         yield from r.iter_bytes(chunk_size=65536)
 
