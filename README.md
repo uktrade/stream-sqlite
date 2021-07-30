@@ -3,6 +3,13 @@
 Python function to extract all the rows from a SQLite database file concurrently with iterating over its bytes. Typically used to extract rows while downloading, without loading the entire file to memory or disk.
 
 
+## Installation
+
+```bash
+pip install stream-sqlite
+```
+
+
 ## Usage
 
 ```python
