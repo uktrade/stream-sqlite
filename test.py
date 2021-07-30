@@ -17,20 +17,20 @@ class TestStreamSqlite(unittest.TestCase):
         for chunk_size in [1, 2, 3, 5, 7, 32, 131072]:
             with self.subTest(chunk_size=chunk_size):
                 sqls = [
-                    "CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);",
-                    "CREATE TABLE my_table_2 (my_text_col_a text, my_text_col_b text);",
-                    "INSERT INTO my_table_1 VALUES ('some-text-a', 'some-text-b')",
+                    "CREATE TABLE \"my_table_'1\" (my_text_col_a text, my_text_col_b text);",
+                    "CREATE TABLE \"my_table_'2\" (my_text_col_a text, my_text_col_b text);",
+                    "INSERT INTO \"my_table_'1\" VALUES ('some-text-a', 'some-text-b')",
                 ]
                 all_chunks = tables_list(stream_sqlite(db(sqls, chunk_size)))
                 self.assertEqual([(
-                    'my_table_1',
+                    "my_table_'1",
                     (
                         {'cid': 0, 'name': 'my_text_col_a', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
                         {'cid': 1, 'name': 'my_text_col_b', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
                     ),
                     [{'my_text_col_a': b'some-text-a', 'my_text_col_b': b'some-text-b'}],
                 ),(
-                    'my_table_2',
+                    "my_table_'2",
                     (
                         {'cid': 0, 'name': 'my_text_col_a', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
                         {'cid': 1, 'name': 'my_text_col_b', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},

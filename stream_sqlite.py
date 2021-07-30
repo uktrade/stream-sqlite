@@ -157,7 +157,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
                 def schema(cur, table_name, sql):
                     cur.execute(sql)
-                    cur.execute("PRAGMA table_info('" + table_name + "');")
+                    cur.execute("PRAGMA table_info('" + table_name.replace("'","''") + "');")
                     rows = cur.fetchall()
                     cols = [d[0] for d in cur.description]
                     return tuple({col: row[i] for i, col in enumerate(cols)} for row in rows)
