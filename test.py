@@ -134,11 +134,14 @@ class TestStreamSqlite(unittest.TestCase):
             [1, 2, 3, 5, 7, 32, 131072],
         ):
             with self.subTest(page_size=page_size, chunk_size=chunk_size):
-                sqls = [
-                    "CREATE TABLE my_table_1 (my_col_a integer);",
-                    "INSERT INTO my_table_1 VALUES " + ",".join("({})".format(i) for i in range(0, 1024)),
-                    "CREATE INDEX my_index ON my_table_1(my_col_a);"
-                ]
+                sqls = (
+                    ["CREATE TABLE my_table_1 (my_col_a integer);"] +
+                    [
+                        "INSERT INTO my_table_1 VALUES ({});".format(i)
+                        for i in range(0, 1024)
+                    ] +
+                    ["CREATE INDEX my_index ON my_table_1(my_col_a);"]
+                )
                 all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size)))
                 self.assertEqual([(
                     "my_table_1",
