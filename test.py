@@ -148,6 +148,17 @@ class TestStreamSqlite(unittest.TestCase):
         with self.assertRaises(ValueError):
             next(stream_sqlite([b'0123456789'] * 10))
 
+    def test_bad_page_type(self):
+        sqls = [
+            "CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);",
+        ] + [
+            "INSERT INTO my_table_1 VALUES ('some-text-a', 'some-text-b')",
+        ]
+        db_bytes = bytearray(b''.join(db(sqls, page_size=1024, chunk_size=131072)))
+        db_bytes[1024] = 99
+        with self.assertRaises(ValueError):
+            next(tables_list(stream_sqlite([db_bytes])))
+
 def db(sqls, page_size, chunk_size):
     with tempfile.NamedTemporaryFile() as fp:
         with sqlite3.connect(fp.name, isolation_level=None) as con:
