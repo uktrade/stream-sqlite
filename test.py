@@ -144,6 +144,10 @@ class TestStreamSqlite(unittest.TestCase):
         with self.assertRaises(ValueError):
             next(stream_sqlite([b'too-short']))
 
+    def test_bad_header(self):
+        with self.assertRaises(ValueError):
+            next(stream_sqlite([b'0123456789'] * 10))
+
 def db(sqls, page_size, chunk_size):
     with tempfile.NamedTemporaryFile() as fp:
         with sqlite3.connect(fp.name, isolation_level=None) as con:
