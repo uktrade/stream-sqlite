@@ -132,7 +132,6 @@ def stream_sqlite(sqlite_chunks):
                     )
 
             def process_table_leaf_master():
-
                 first_free_block, num_cells, cell_content_start, num_frag_free = \
                     table_leaf_header.unpack(page_reader(7))
 
