@@ -170,7 +170,6 @@ def stream_sqlite(sqlite_chunks):
             page_type = page_reader(1)
             first_free_block, num_cells, cell_content_start, num_frag_free = \
                 table_header.unpack(page_reader(7))
-            cell_content_start = 65536 if cell_content_start == 0 else cell_content_start
             right_most_pointer, = \
                 unsigned_long.unpack(page_reader(4)) if page_type == INTERIOR_TABLE else \
                 (None,)
@@ -215,7 +214,6 @@ def stream_sqlite(sqlite_chunks):
 
             first_free_block, num_cells, cell_content_start, num_frag_free = \
                 table_header.unpack(page_reader(7))
-            cell_content_start = 65536 if cell_content_start == 0 else cell_content_start
             right_most_pointer, = \
                 unsigned_long.unpack(page_reader(4)) if page_type == INTERIOR_INDEX else \
                 (None,)
