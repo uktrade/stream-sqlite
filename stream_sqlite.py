@@ -158,10 +158,10 @@ def stream_sqlite(sqlite_chunks):
 
                     return tuple(
                         (
-                            cell[0],                        # table or index
-                            cell[1],                        # table name
-                            schema(cur, cell[1], cell[4]),  # table info
-                            cell[3],                        # root page
+                            cell[0],                                                        # table or index
+                            cell[1],                                                        # table name
+                            schema(cur, cell[1], cell[4]) if cell[0] == 'table' else None,  # table info
+                            cell[3],                                                        # root page
                         )
                         for cell in master_cells
                         if cell[0] in ('table', 'index')
