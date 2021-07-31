@@ -1,3 +1,4 @@
+import itertools
 import sqlite3
 import tempfile
 import unittest
@@ -8,20 +9,26 @@ from stream_sqlite import stream_sqlite
 class TestStreamSqlite(unittest.TestCase):
 
     def test_empty_database(self):
-        for chunk_size in [1, 2, 3, 5, 7, 32, 131072]:
-            with self.subTest(chunk_size=chunk_size):
-                all_chunks = tables_list(stream_sqlite(db(['VACUUM;'], chunk_size)))
+        for page_size, chunk_size in itertools.product(
+            [512, 1024, 4096, 8192, 16384, 32768, 65536],
+            [1, 2, 3, 5, 7, 32, 131072],
+        ):
+            with self.subTest(page_size, chunk_size=chunk_size):
+                all_chunks = tables_list(stream_sqlite(db(['VACUUM;'], page_size, chunk_size)))
                 self.assertEqual([], all_chunks)
 
     def test_small_table(self):
-        for chunk_size in [1, 2, 3, 5, 7, 32, 131072]:
-            with self.subTest(chunk_size=chunk_size):
+        for page_size, chunk_size in itertools.product(
+            [512, 1024, 4096, 8192, 16384, 32768, 65536],
+            [1, 2, 3, 5, 7, 32, 131072],
+        ):
+            with self.subTest(page_size=page_size, chunk_size=chunk_size):
                 sqls = [
                     "CREATE TABLE \"my_table_'1\" (my_text_col_a text, my_text_col_b text);",
                     "CREATE TABLE \"my_table_'2\" (my_text_col_a text, my_text_col_b text);",
                     "INSERT INTO \"my_table_'1\" VALUES ('some-text-a', 'some-text-b')",
                 ]
-                all_chunks = tables_list(stream_sqlite(db(sqls, chunk_size)))
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size)))
                 self.assertEqual([(
                     "my_table_'1",
                     (
@@ -39,14 +46,17 @@ class TestStreamSqlite(unittest.TestCase):
                 )], all_chunks)
 
     def test_integers(self):
-        for chunk_size in [1, 2, 3, 5, 7, 32, 131072]:
-            with self.subTest(chunk_size=chunk_size):
+        for page_size, chunk_size in itertools.product(
+            [512, 1024, 4096, 8192, 16384, 32768, 65536],
+            [1, 2, 3, 5, 7, 32, 131072],
+        ):
+            with self.subTest(page_size=page_size, chunk_size=chunk_size):
                 sqls = [
                     "CREATE TABLE my_table_1 (my_text_col_a integer);",
                     "INSERT INTO my_table_1 VALUES (0),(1),(2),(65536),(16777216),(4294967296),(1099511627776),(281474976710656),(72057594037927936)",
                     "INSERT INTO my_table_1 VALUES (0),(-1),(-2),(-65536),(-16777216),(-4294967296),(-1099511627776),(-281474976710656),(-72057594037927936)",
                 ]
-                all_chunks = tables_list(stream_sqlite(db(sqls, chunk_size)))
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size)))
                 self.assertEqual([(
                     'my_table_1',
                     (
@@ -74,13 +84,16 @@ class TestStreamSqlite(unittest.TestCase):
                 )], all_chunks)
 
     def test_many_small_tables(self):
-        for chunk_size in [1, 2, 3, 5, 7, 32, 131072]:
-            with self.subTest(chunk_size=chunk_size):
+        for page_size, chunk_size in itertools.product(
+            [512, 1024, 4096, 8192, 16384, 32768, 65536],
+            [1, 2, 3, 5, 7, 32, 131072],
+        ):
+            with self.subTest(page_size=page_size, chunk_size=chunk_size):
                 sqls = [
                     "CREATE TABLE my_table_{} (my_text_col_a text, my_text_col_b text);".format(i)
                     for i in range(1, 101)
                 ] + ["INSERT INTO my_table_1 VALUES ('some-text-a', 'some-text-b')"]
-                all_chunks = tables_list(stream_sqlite(db(sqls, chunk_size)))
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size)))
                 self.assertEqual([(
                     'my_table_1',
                     (
@@ -98,14 +111,17 @@ class TestStreamSqlite(unittest.TestCase):
                 ) for i in range(2, 101)], all_chunks)
 
     def test_large_table(self):
-        for chunk_size in [1, 2, 3, 5, 7, 32, 131072]:
-            with self.subTest(chunk_size=chunk_size):
+        for page_size, chunk_size in itertools.product(
+            [512, 1024, 4096, 8192, 16384, 32768, 65536],
+            [1, 2, 3, 5, 7, 32, 131072],
+        ):
+            with self.subTest(page_size=page_size, chunk_size=chunk_size):
                 sqls = [
                     "CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);",
                 ] + [
                     "INSERT INTO my_table_1 VALUES ('some-text-a', 'some-text-b')",
                 ] * 1000
-                all_chunks = tables_list(stream_sqlite(db(sqls, chunk_size)))
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size)))
 
                 self.assertEqual(
                     [{'my_text_col_a': 'some-text-a', 'my_text_col_b': 'some-text-b'}] * 1000,
@@ -120,14 +136,15 @@ class TestStreamSqlite(unittest.TestCase):
         ] * 1000 + [
             "DELETE FROM my_table_1",
         ]
-        all_chunks = tables_list(stream_sqlite(db(sqls, chunk_size=131072)))
+        all_chunks = tables_list(stream_sqlite(db(sqls, page_size=1024, chunk_size=131072)))
 
         self.assertEqual([], all_chunks[0][2])
 
-def db(sqls, chunk_size):
+def db(sqls, page_size, chunk_size):
     with tempfile.NamedTemporaryFile() as fp:
         with sqlite3.connect(fp.name, isolation_level=None) as con:
             cur = con.cursor()
+            cur.execute('PRAGMA page_size = {};'.format(page_size))
             for sql in sqls:
                 cur.execute(sql)
 
