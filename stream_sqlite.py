@@ -4,7 +4,7 @@ from struct import Struct, unpack
 from sqlite3 import connect
 
 
-def stream_sqlite(sqlite_chunks, chunk_size=65536):
+def stream_sqlite(sqlite_chunks):
     INTERIOR_INDEX = b'\x02'
     INTERIOR_TABLE = b'\x05'
     LEAF_INDEX = b'\x0a'
@@ -32,7 +32,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                         raise ValueError('Fewer bytes than expected in SQLite stream') from None
                 prev_offset = offset
                 prev_chunk = chunk
-                to_yield = min(num, len(chunk) - offset, chunk_size)
+                to_yield = min(num, len(chunk) - offset)
                 offset = (offset + to_yield) % len(chunk)
                 chunk = chunk if offset else b''
                 num -= to_yield
