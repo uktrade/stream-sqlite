@@ -214,7 +214,6 @@ def stream_sqlite(sqlite_chunks):
         def process_index_page(table_name, page_bytes, page_reader):
             page_type = page_reader(1)
             if page_type == LEAF_INDEX:
-                yield from []
                 return
 
             first_free_block, num_cells, cell_content_start, num_frag_free = \
