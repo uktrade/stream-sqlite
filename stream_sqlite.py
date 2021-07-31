@@ -174,14 +174,6 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                         if cell[0] == 'table'
                     )
 
-            def process_if_buffered_or_remember(table_name, page_num):
-                try:
-                    page_bytes, page_reader = page_buffer.pop(page_num)
-                except KeyError:
-                    page_types[page_num] = partial(process_table_page, table_name)
-                else:
-                    yield from process_table_page(table_name, page_bytes, page_reader)
-
             page_type = page_reader(1)
             first_free_block, num_cells, cell_content_start, num_frag_free = \
                 table_header.unpack(page_reader(7))
@@ -195,7 +187,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             if page_type == LEAF_TABLE and table_name == 'sqlite_schema':
                 for row in get_master_table(yield_leaf_table_cells(page_bytes, pointers)):
                     master_table[row['name']] = row['info']
-                    yield from process_if_buffered_or_remember(row['name'], row['root_page'])
+                    yield from process_if_buffered_or_remember(partial(process_table_page, row['name']), row['root_page'])
 
             elif page_type == LEAF_TABLE:
                 table_info = master_table[table_name]
@@ -209,40 +201,34 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
             elif page_type == INTERIOR_TABLE:
                 for page_num in yield_interior_table_cells(page_bytes, pointers):
-                    yield from process_if_buffered_or_remember(table_name, page_num)
-                yield from process_if_buffered_or_remember(table_name, right_most_pointer)
+                    yield from process_if_buffered_or_remember(
+                        partial(process_table_page, table_name), page_num)
+                yield from process_if_buffered_or_remember(
+                    partial(process_table_page, table_name), right_most_pointer)
 
             else:
                 raise ValueError('Unhandled page type in SQLite stream')
 
         def process_freelist_trunk_page(page_bytes, page_reader):
-            def trunk_process_if_buffered_or_remember(page_num):
-                try:
-                    page_bytes, page_reader = page_buffer.pop(page_num)
-                except KeyError:
-                    page_types[page_num] = process_freelist_trunk_page
-                else:
-                    yield from process_freelist_trunk_page(page_bytes, page_reader)
-
-            def leaf_process_if_buffered_or_remember(page_num):
-                try:
-                    page_bytes, page_reader = page_buffer.pop(page_num)
-                except KeyError:
-                    page_types[page_num] = process_freelist_leaf_page
-                else:
-                    yield from process_freelist_leaf_page(page_bytes, page_reader)
-
             next_trunk, num_leaves = freelist_trunk_header.unpack(page_reader(8))
             leaf_pages = unpack('>{}L'.format(num_leaves), page_reader(num_leaves * 4))
 
             for page_num in leaf_pages:
-                yield from leaf_process_if_buffered_or_remember(page_num)
+                yield from process_if_buffered_or_remember(process_freelist_leaf_page, page_num)
 
             if next_trunk != 0:
-                yield from trunk_process_if_buffered_or_remember(next_trunk)
+                yield from process_if_buffered_or_remember(process_freelist_trunk_page, next_trunk)
 
         def process_freelist_leaf_page(page_bytes, page_reader):
             yield from []
+
+        def process_if_buffered_or_remember(process, page_num):
+            try:
+                page_bytes, page_reader = page_buffer.pop(page_num)
+            except KeyError:
+                page_types[page_num] = process
+            else:
+                yield from process(page_bytes, page_reader)
 
         page_types[1] = partial(process_table_page, 'sqlite_schema')
         page_types[first_freelist_trunk_page] = process_freelist_trunk_page
