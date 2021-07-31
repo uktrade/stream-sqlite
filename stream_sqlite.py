@@ -207,7 +207,7 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                     partial(process_table_page, table_name), right_most_pointer)
 
             else:
-                raise ValueError('Unhandled page type in SQLite stream')
+                raise ValueError('Unhandled table page type in SQLite stream')
 
         def process_freelist_trunk_page(page_bytes, page_reader):
             next_trunk, num_leaves = freelist_trunk_header.unpack(page_reader(8))
