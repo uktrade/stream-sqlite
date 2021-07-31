@@ -128,6 +128,26 @@ class TestStreamSqlite(unittest.TestCase):
                     all_chunks[0][2],
                 )
 
+    def test_index(self):
+        for page_size, chunk_size in itertools.product(
+            [512, 1024, 4096, 8192, 16384, 32768, 65536],
+            [1, 2, 3, 5, 7, 32, 131072],
+        ):
+            with self.subTest(page_size=page_size, chunk_size=chunk_size):
+                sqls = [
+                    "CREATE TABLE my_table_1 (my_col_a integer);",
+                    "INSERT INTO my_table_1 VALUES " + ",".join("({})".format(i) for i in range(0, 1024)),
+                    "CREATE INDEX my_index ON my_table_1(my_col_a);"
+                ]
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size)))
+                self.assertEqual([(
+                    "my_table_1",
+                    (
+                        {'cid': 0, 'name': 'my_col_a', 'type': 'integer', 'notnull': 0, 'dflt_value': None, 'pk': 0},
+                    ),
+                    [{'my_col_a': i} for i in range(0, 1024)],
+                )], all_chunks)
+
     def test_freelist(self):
         sqls = [
             "CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);",
