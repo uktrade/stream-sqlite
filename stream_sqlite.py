@@ -145,12 +145,6 @@ def stream_sqlite(sqlite_chunks):
                         )
                     )
 
-            def yield_interior_table_cells(page_bytes, pointers):
-                for pointer in pointers:
-                    cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
-                    page_number, =  unsigned_long.unpack(cell_num_reader(4))
-                    yield page_number
-
             def get_master_table(master_cells):
                 def schema(cur, table_name, sql):
                     cur.execute(sql)
@@ -202,9 +196,12 @@ def stream_sqlite(sqlite_chunks):
                 )
 
             elif page_type == INTERIOR_TABLE:
-                for page_num in yield_interior_table_cells(page_bytes, pointers):
+                for pointer in pointers:
+                    cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
+                    page_number, =  unsigned_long.unpack(cell_num_reader(4))
                     yield from process_if_buffered_or_remember(
-                        partial(process_table_page, table_name), page_num)
+                        partial(process_table_page, table_name), page_number)
+
                 yield from process_if_buffered_or_remember(
                     partial(process_table_page, table_name), right_most_pointer)
 
