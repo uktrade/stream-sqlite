@@ -109,7 +109,7 @@ def stream_sqlite(sqlite_chunks):
 
         def process_table_page(table_name, page_bytes, page_reader):
 
-            def yield_leaf_table_cells(page_bytes, pointers):
+            def yield_leaf_table_cells(pointers):
 
                 def serial_types(header_remaining, cell_varint_reader):
                     while header_remaining:
@@ -177,7 +177,7 @@ def stream_sqlite(sqlite_chunks):
             pointers = unpack('>{}H'.format(num_cells), page_reader(num_cells * 2))
 
             if page_type == LEAF_TABLE and table_name == 'sqlite_schema':
-                for table_or_index, table_name, table_info, root_page in get_master_table(yield_leaf_table_cells(page_bytes, pointers)):
+                for table_or_index, table_name, table_info, root_page in get_master_table(yield_leaf_table_cells(pointers)):
                     if table_or_index == 'table':
                         master_table[table_name] = table_info
                         yield from process_if_buffered_or_remember(partial(process_table_page, table_name), root_page)
@@ -191,7 +191,7 @@ def stream_sqlite(sqlite_chunks):
                         table_info[i]['name']: value
                         for i, value in enumerate(cell)
                     }
-                    for cell in yield_leaf_table_cells(page_bytes, pointers)
+                    for cell in yield_leaf_table_cells(pointers)
                 )
 
             elif page_type == INTERIOR_TABLE:
