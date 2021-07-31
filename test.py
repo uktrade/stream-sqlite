@@ -140,6 +140,10 @@ class TestStreamSqlite(unittest.TestCase):
 
         self.assertEqual([], all_chunks[0][2])
 
+    def test_truncated(self):
+        with self.assertRaises(ValueError):
+            next(stream_sqlite([b'too-short']))
+
 def db(sqls, page_size, chunk_size):
     with tempfile.NamedTemporaryFile() as fp:
         with sqlite3.connect(fp.name, isolation_level=None) as con:
