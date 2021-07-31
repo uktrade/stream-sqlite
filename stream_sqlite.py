@@ -226,15 +226,17 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
 
             def leaf_process_if_buffered_or_remember(page_num):
                 try:
-                    del page_buffer[page_num]
+                    page_bytes, page_reader = page_buffer.pop(page_num)
                 except KeyError:
                     page_types[page_num] = process_freelist_leaf_page
+                else:
+                    yield from process_freelist_leaf_page(page_bytes, page_reader)
 
             next_trunk, num_leaves = freelist_trunk_header.unpack(page_reader(8))
             leaf_pages = unpack('>{}L'.format(num_leaves), page_reader(num_leaves * 4))
 
             for page_num in leaf_pages:
-                leaf_process_if_buffered_or_remember(page_num)
+                yield from leaf_process_if_buffered_or_remember(page_num)
 
             if next_trunk != 0:
                 yield from trunk_process_if_buffered_or_remember(next_trunk)
