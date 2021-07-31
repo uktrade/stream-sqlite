@@ -5,13 +5,13 @@ from sqlite3 import connect
 
 
 def stream_sqlite(sqlite_chunks):
-    INTERIOR_TABLE = b'\x05'
     LEAF_INDEX = b'\x0a'
     LEAF_TABLE = b'\x0d'
 
     unsigned_short = Struct('>H')
     unsigned_long = Struct('>L')
-    table_header = Struct('>HHHB')
+    table_leaf_header = Struct('>HHHB')
+    table_interior_header = Struct('>HHHBL')
     index_interior_header = Struct('>HHHBL')
     freelist_trunk_header = Struct('>LL')
 
@@ -109,6 +109,71 @@ def stream_sqlite(sqlite_chunks):
 
         def process_table_page(table_name, page_bytes, page_reader):
 
+            def get_master_table(master_cells):
+                def schema(cur, table_name, sql):
+                    cur.execute(sql)
+                    cur.execute("PRAGMA table_info('" + table_name.replace("'","''") + "');")
+                    rows = cur.fetchall()
+                    cols = [d[0] for d in cur.description]
+                    return tuple({col: row[i] for i, col in enumerate(cols)} for row in rows)
+
+                with connect(':memory:') as con:
+                    cur = con.cursor()
+
+                    return tuple(
+                        (
+                            cell[0],                                                        # table or index
+                            cell[1],                                                        # table name
+                            schema(cur, cell[1], cell[4]) if cell[0] == 'table' else None,  # table info
+                            cell[3],                                                        # root page
+                        )
+                        for cell in master_cells
+                        if cell[0] in ('table', 'index')
+                    )
+
+            def process_table_leaf_master():
+
+                first_free_block, num_cells, cell_content_start, num_frag_free = \
+                    table_leaf_header.unpack(page_reader(7))
+
+                pointers = unpack('>{}H'.format(num_cells), page_reader(num_cells * 2))
+                for table_or_index, table_name, table_info, root_page in get_master_table(yield_leaf_table_cells(pointers)):
+                    if table_or_index == 'table':
+                        master_table[table_name] = table_info
+                        yield from process_if_buffered_or_remember(partial(process_table_page, table_name), root_page)
+                    else:
+                        yield from process_if_buffered_or_remember(partial(process_index_page, table_name), root_page)
+
+            def process_table_leaf_non_master():
+                first_free_block, num_cells, cell_content_start, num_frag_free = \
+                    table_leaf_header.unpack(page_reader(7))
+
+                pointers = unpack('>{}H'.format(num_cells), page_reader(num_cells * 2))
+                table_info = master_table[table_name]
+
+                yield table_name, table_info, (
+                    {
+                        table_info[i]['name']: value
+                        for i, value in enumerate(cell)
+                    }
+                    for cell in yield_leaf_table_cells(pointers)
+                )
+
+            def process_table_interior():
+                first_free_block, num_cells, cell_content_start, num_frag_free, right_most_pointer = \
+                    table_interior_header.unpack(page_reader(11))
+
+                pointers = unpack('>{}H'.format(num_cells), page_reader(num_cells * 2))
+
+                for pointer in pointers:
+                    cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
+                    page_number, =  unsigned_long.unpack(cell_num_reader(4))
+                    yield from process_if_buffered_or_remember(
+                        partial(process_table_page, table_name), page_number)
+
+                yield from process_if_buffered_or_remember(
+                    partial(process_table_page, table_name), right_most_pointer)
+
             def yield_leaf_table_cells(pointers):
 
                 def serial_types(header_remaining, cell_varint_reader):
@@ -145,67 +210,12 @@ def stream_sqlite(sqlite_chunks):
                         )
                     )
 
-            def get_master_table(master_cells):
-                def schema(cur, table_name, sql):
-                    cur.execute(sql)
-                    cur.execute("PRAGMA table_info('" + table_name.replace("'","''") + "');")
-                    rows = cur.fetchall()
-                    cols = [d[0] for d in cur.description]
-                    return tuple({col: row[i] for i, col in enumerate(cols)} for row in rows)
-
-                with connect(':memory:') as con:
-                    cur = con.cursor()
-
-                    return tuple(
-                        (
-                            cell[0],                                                        # table or index
-                            cell[1],                                                        # table name
-                            schema(cur, cell[1], cell[4]) if cell[0] == 'table' else None,  # table info
-                            cell[3],                                                        # root page
-                        )
-                        for cell in master_cells
-                        if cell[0] in ('table', 'index')
-                    )
-
             page_type = page_reader(1)
-            first_free_block, num_cells, cell_content_start, num_frag_free = \
-                table_header.unpack(page_reader(7))
-            right_most_pointer, = \
-                unsigned_long.unpack(page_reader(4)) if page_type == INTERIOR_TABLE else \
-                (None,)
-
-            pointers = unpack('>{}H'.format(num_cells), page_reader(num_cells * 2))
-
-            if page_type == LEAF_TABLE and table_name == 'sqlite_schema':
-                for table_or_index, table_name, table_info, root_page in get_master_table(yield_leaf_table_cells(pointers)):
-                    if table_or_index == 'table':
-                        master_table[table_name] = table_info
-                        yield from process_if_buffered_or_remember(partial(process_table_page, table_name), root_page)
-                    else:
-                        yield from process_if_buffered_or_remember(partial(process_index_page, table_name), root_page)
-
-            elif page_type == LEAF_TABLE:
-                table_info = master_table[table_name]
-                yield table_name, table_info, (
-                    {
-                        table_info[i]['name']: value
-                        for i, value in enumerate(cell)
-                    }
-                    for cell in yield_leaf_table_cells(pointers)
-                )
-
-            elif page_type == INTERIOR_TABLE:
-                for pointer in pointers:
-                    cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
-                    page_number, =  unsigned_long.unpack(cell_num_reader(4))
-                    yield from process_if_buffered_or_remember(
-                        partial(process_table_page, table_name), page_number)
-
-                yield from process_if_buffered_or_remember(
-                    partial(process_table_page, table_name), right_most_pointer)
-
-            else:
-                raise ValueError('Unhandled table page type in SQLite stream')
+            yield from (
+                process_table_leaf_master() if page_type == LEAF_TABLE and table_name == 'sqlite_schema' else \
+                process_table_leaf_non_master() if page_type == LEAF_TABLE else \
+                process_table_interior()
+            )
 
         def process_index_page(table_name, page_bytes, page_reader):
 
