@@ -110,6 +110,7 @@ def stream_sqlite(sqlite_chunks):
         def process_table_page(table_name, page_bytes, page_reader):
 
             def get_master_table(master_cells):
+
                 def schema(cur, table_name, sql):
                     cur.execute(sql)
                     cur.execute("PRAGMA table_info('" + table_name.replace("'","''") + "');")
@@ -129,6 +130,42 @@ def stream_sqlite(sqlite_chunks):
                         )
                         for cell in master_cells
                         if cell[0] in ('table', 'index')
+                    )
+
+            def yield_leaf_table_cells(pointers):
+
+                def serial_types(header_remaining, cell_varint_reader):
+                    while header_remaining:
+                        h, v_size = cell_varint_reader()
+                        yield h
+                        header_remaining -= v_size
+
+                for pointer in pointers:
+                    cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
+
+                    payload_size, _ = cell_varint_reader()
+                    rowid, _ = cell_varint_reader()
+
+                    header_remaining, header_varint_size = cell_varint_reader()
+                    header_remaining -= header_varint_size
+
+                    yield tuple(
+                        parser(cell_num_reader(length))
+                        for serial_type in tuple(serial_types(header_remaining, cell_varint_reader))
+                        for (length, parser) in (
+                            (0, lambda _: None) if serial_type == 0 else \
+                            (1, lambda raw: int.from_bytes(raw, byteorder='big', signed=True)) if serial_type == 1 else \
+                            (2, lambda raw: int.from_bytes(raw, byteorder='big', signed=True)) if serial_type == 2 else \
+                            (3, lambda raw: int.from_bytes(raw, byteorder='big', signed=True)) if serial_type == 3 else \
+                            (4, lambda raw: int.from_bytes(raw, byteorder='big', signed=True)) if serial_type == 4 else \
+                            (6, lambda raw: int.from_bytes(raw, byteorder='big', signed=True)) if serial_type == 5 else \
+                            (8, lambda raw: int.from_bytes(raw, byteorder='big', signed=True)) if serial_type == 6 else \
+                            (0, lambda _: 0) if serial_type == 8 else \
+                            (0, lambda _: 1) if serial_type == 9 else \
+                            (int((serial_type - 12)/2), lambda raw: raw) if serial_type % 2 == 0 else \
+                            (int((serial_type - 13)/2), lambda raw: raw.decode()) if serial_type % 2 == 1 else \
+                            (None, None),
+                        )
                     )
 
             def process_table_leaf_master():
@@ -172,42 +209,6 @@ def stream_sqlite(sqlite_chunks):
 
                 yield from process_if_buffered_or_remember(
                     partial(process_table_page, table_name), right_most_pointer)
-
-            def yield_leaf_table_cells(pointers):
-
-                def serial_types(header_remaining, cell_varint_reader):
-                    while header_remaining:
-                        h, v_size = cell_varint_reader()
-                        yield h
-                        header_remaining -= v_size
-
-                for pointer in pointers:
-                    cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
-
-                    payload_size, _ = cell_varint_reader()
-                    rowid, _ = cell_varint_reader()
-
-                    header_remaining, header_varint_size = cell_varint_reader()
-                    header_remaining -= header_varint_size
-
-                    yield tuple(
-                        parser(cell_num_reader(length))
-                        for serial_type in tuple(serial_types(header_remaining, cell_varint_reader))
-                        for (length, parser) in (
-                            (0, lambda _: None) if serial_type == 0 else \
-                            (1, lambda raw: int.from_bytes(raw, byteorder='big', signed=True)) if serial_type == 1 else \
-                            (2, lambda raw: int.from_bytes(raw, byteorder='big', signed=True)) if serial_type == 2 else \
-                            (3, lambda raw: int.from_bytes(raw, byteorder='big', signed=True)) if serial_type == 3 else \
-                            (4, lambda raw: int.from_bytes(raw, byteorder='big', signed=True)) if serial_type == 4 else \
-                            (6, lambda raw: int.from_bytes(raw, byteorder='big', signed=True)) if serial_type == 5 else \
-                            (8, lambda raw: int.from_bytes(raw, byteorder='big', signed=True)) if serial_type == 6 else \
-                            (0, lambda _: 0) if serial_type == 8 else \
-                            (0, lambda _: 1) if serial_type == 9 else \
-                            (int((serial_type - 12)/2), lambda raw: raw) if serial_type % 2 == 0 else \
-                            (int((serial_type - 13)/2), lambda raw: raw.decode()) if serial_type % 2 == 1 else \
-                            (None, None),
-                        )
-                    )
 
             page_type = page_reader(1)
             yield from (
