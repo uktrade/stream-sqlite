@@ -165,11 +165,11 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
                     cur = con.cursor()
 
                     return tuple(
-                        {
-                            'name': cell[1],
-                            'info': schema(cur, cell[1], cell[4]),
-                            'root_page': cell[3],
-                        }
+                        (
+                            cell[1],                        # table name
+                            schema(cur, cell[1], cell[4]),  # table info
+                            cell[3],                        # root page
+                        )
                         for cell in master_cells
                         if cell[0] == 'table'
                     )
@@ -185,9 +185,9 @@ def stream_sqlite(sqlite_chunks, chunk_size=65536):
             pointers = unpack('>{}H'.format(num_cells), page_reader(num_cells * 2))
 
             if page_type == LEAF_TABLE and table_name == 'sqlite_schema':
-                for row in get_master_table(yield_leaf_table_cells(page_bytes, pointers)):
-                    master_table[row['name']] = row['info']
-                    yield from process_if_buffered_or_remember(partial(process_table_page, row['name']), row['root_page'])
+                for table_name, table_info, root_page in get_master_table(yield_leaf_table_cells(page_bytes, pointers)):
+                    master_table[table_name] = table_info
+                    yield from process_if_buffered_or_remember(partial(process_table_page, table_name), root_page)
 
             elif page_type == LEAF_TABLE:
                 table_info = master_table[table_name]
