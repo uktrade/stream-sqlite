@@ -103,14 +103,21 @@ def stream_sqlite(sqlite_chunks):
         page_reader, _ = get_chunk_readers(page_bytes)
         page_reader(100)
 
+        lock_byte_page = 1073741824 / page_size
+
         yield 1, page_bytes, page_reader
 
         for page_num in range(2, num_pages_expected + 1):
             page_bytes = get_bytes(page_size)
             page_reader, _ = get_chunk_readers(page_bytes)
 
-            is_ptrmap_page = incremental_vacuum and (page_num - 2) % int(page_size/5) == 0
-            if is_ptrmap_page:
+            # ptrmap and lock bytes pages are not processed in any way
+            ptrmap_page_prev = incremental_vacuum and (page_num - 1 - 2) % int(page_size/5) == 0
+            ptrmap_page_curr = incremental_vacuum and (page_num - 2) % int(page_size/5) == 0
+            lock_byte_page_prev = (page_num - 1) == lock_byte_page
+            lock_byte_page_cur = page_num == lock_byte_page
+
+            if ptrmap_page_curr or lock_byte_page_cur or (ptrmap_page_prev and lock_byte_page_prev):
                 continue
 
             yield page_num, page_bytes, page_reader
