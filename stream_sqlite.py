@@ -104,7 +104,7 @@ def stream_sqlite(sqlite_chunks):
         page_reader, _ = get_chunk_readers(page_bytes)
         page_reader(100)
 
-        lock_byte_page = 1073741824 / page_size
+        lock_byte_page = 1073741824 // page_size + 1
         ptrmap_j = int(ceil(page_size/5))
 
         yield 1, page_bytes, page_reader
