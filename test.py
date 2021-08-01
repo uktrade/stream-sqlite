@@ -165,7 +165,7 @@ class TestStreamSqlite(unittest.TestCase):
                     ["CREATE TABLE my_table_1 (my_col_a integer);"] +
                     [
                         "INSERT INTO my_table_1 VALUES ({});".format(i)
-                        for i in range(0, 12000)
+                        for i in range(0, 20000)
                     ]
                 )
                 all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size)))
@@ -174,7 +174,7 @@ class TestStreamSqlite(unittest.TestCase):
                     (
                         column_constructor(cid=0, name='my_col_a', type='integer', notnull=0, dflt_value=None, pk=0),
                     ),
-                    [(i,) for i in range(0, 12000)],
+                    [(i,) for i in range(0, 20000)],
                 )], all_chunks)
 
     def test_freelist(self):

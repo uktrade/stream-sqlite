@@ -1,6 +1,7 @@
 from collections import namedtuple
 from functools import partial
 from itertools import groupby
+from math import ceil
 from struct import Struct, unpack
 from sqlite3 import connect
 
@@ -104,6 +105,7 @@ def stream_sqlite(sqlite_chunks):
         page_reader(100)
 
         lock_byte_page = 1073741824 / page_size
+        ptrmap_j = int(ceil(page_size/5))
 
         yield 1, page_bytes, page_reader
 
@@ -112,8 +114,8 @@ def stream_sqlite(sqlite_chunks):
             page_reader, _ = get_chunk_readers(page_bytes)
 
             # ptrmap and lock bytes pages are not processed in any way
-            ptrmap_page_prev = incremental_vacuum and (page_num - 1 - 2) % int(page_size/5) == 0
-            ptrmap_page_curr = incremental_vacuum and (page_num - 2) % int(page_size/5) == 0
+            ptrmap_page_prev = incremental_vacuum and (page_num - 1 - 2) % ptrmap_j == 0
+            ptrmap_page_curr = incremental_vacuum and (page_num - 2) % ptrmap_j == 0
             lock_byte_page_prev = (page_num - 1) == lock_byte_page
             lock_byte_page_cur = page_num == lock_byte_page
 
