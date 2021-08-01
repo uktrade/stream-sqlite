@@ -154,6 +154,29 @@ class TestStreamSqlite(unittest.TestCase):
                     [(i,) for i in range(0, 1024)],
                 )], all_chunks)
 
+    def test_with_pointermap_pages(self):
+        for page_size, chunk_size in itertools.product(
+            [512, 1024, 4096, 8192],
+            [512],
+        ):
+            with self.subTest(page_size=page_size, chunk_size=chunk_size):
+                sqls = (
+                    ["PRAGMA auto_vacuum = FULL;"] +
+                    ["CREATE TABLE my_table_1 (my_col_a integer);"] +
+                    [
+                        "INSERT INTO my_table_1 VALUES ({});".format(i)
+                        for i in range(0, 12000)
+                    ]
+                )
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size)))
+                self.assertEqual([(
+                    "my_table_1",
+                    (
+                        column_constructor(cid=0, name='my_col_a', type='integer', notnull=0, dflt_value=None, pk=0),
+                    ),
+                    [(i,) for i in range(0, 12000)],
+                )], all_chunks)
+
     def test_freelist(self):
         sqls = [
             "CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);",
@@ -184,6 +207,17 @@ class TestStreamSqlite(unittest.TestCase):
         db_bytes[56] = 99
         with self.assertRaises(ValueError):
             next(tables_list(stream_sqlite([db_bytes])))
+
+    def test_bad_usable_space(self):
+        sqls = [
+            "CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);",
+        ] + [
+            "INSERT INTO my_table_1 VALUES ('some-text-a', 'some-text-b')",
+        ]
+        db_bytes = bytearray(b''.join(db(sqls, page_size=1024, chunk_size=131072)))
+        db_bytes[20] = 1
+        with self.assertRaises(ValueError):
+            next(stream_sqlite([db_bytes]))
 
     def test_unused_page(self):
         sqls = [

@@ -9,6 +9,7 @@ def stream_sqlite(sqlite_chunks):
     LEAF_INDEX = b'\x0a'
     LEAF_TABLE = b'\x0d'
 
+    unsigned_char = Struct('B')
     unsigned_short = Struct('>H')
     unsigned_long = Struct('>L')
     table_leaf_header = Struct('>HHHB')
@@ -85,14 +86,19 @@ def stream_sqlite(sqlite_chunks):
         if encoding not in (0, 1):
             raise ValueError('Unsupported encoding')
 
+        reserved_space, = unsigned_char.unpack(header[20:21])
+        if reserved_space != 0:
+            raise ValueError('Reserved space is not supported')
+
         page_size, = unsigned_short.unpack(header[16:18])
         page_size = 65536 if page_size == 1 else page_size
         num_pages_expected, = unsigned_long.unpack(header[28:32])
         first_freelist_trunk_page, = unsigned_long.unpack(header[32:36])
+        incremental_vacuum = any(header[52:56])
 
-        return page_size, num_pages_expected, first_freelist_trunk_page
+        return page_size, num_pages_expected, first_freelist_trunk_page, incremental_vacuum
 
-    def yield_page_nums_pages_readers(get_bytes, page_size, num_pages_expected):
+    def yield_page_nums_pages_readers(get_bytes, page_size, num_pages_expected, incremental_vacuum):
         page_bytes = bytes(100) + get_bytes(page_size - 100)
         page_reader, _ = get_chunk_readers(page_bytes)
         page_reader(100)
@@ -102,6 +108,10 @@ def stream_sqlite(sqlite_chunks):
         for page_num in range(2, num_pages_expected + 1):
             page_bytes = get_bytes(page_size)
             page_reader, _ = get_chunk_readers(page_bytes)
+
+            is_ptrmap_page = incremental_vacuum and (page_num - 2) % int(page_size/5) == 0
+            if is_ptrmap_page:
+                continue
 
             yield page_num, page_bytes, page_reader
 
@@ -290,8 +300,8 @@ def stream_sqlite(sqlite_chunks):
             yield name, info, _rows(single_table_pages)
 
     get_bytes = get_byte_reader(sqlite_chunks)
-    page_size, num_pages_expected, first_freelist_trunk_page = parse_header(get_bytes(100))
+    page_size, num_pages_expected, first_freelist_trunk_page, incremental_vacuum = parse_header(get_bytes(100))
 
-    page_nums_pages_readers = yield_page_nums_pages_readers(get_bytes, page_size, num_pages_expected)
+    page_nums_pages_readers = yield_page_nums_pages_readers(get_bytes, page_size, num_pages_expected, incremental_vacuum)
     table_pages = yield_table_pages(page_nums_pages_readers, first_freelist_trunk_page)
     yield from group_by_table(table_pages)
