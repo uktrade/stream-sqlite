@@ -173,10 +173,10 @@ def stream_sqlite(sqlite_chunks):
 
                 pointers = unpack('>{}H'.format(num_cells), page_reader(num_cells * 2))
                 for table_or_index, table_name, table_info, root_page in get_master_table(yield_leaf_table_cells(pointers)):
-                    if table_or_index == 'table':
-                        yield from process_if_buffered_or_remember(partial(process_table_page, table_name, table_info), root_page)
-                    else:
-                        yield from process_if_buffered_or_remember(process_index_page, root_page)
+                    yield from (
+                        process_if_buffered_or_remember(partial(process_table_page, table_name, table_info), root_page) if table_or_index == 'table' else \
+                        process_if_buffered_or_remember(process_index_page, root_page)
+                    )
 
             def process_table_leaf_non_master():
                 first_free_block, num_cells, cell_content_start, num_frag_free = \
