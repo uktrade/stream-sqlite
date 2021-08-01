@@ -254,7 +254,7 @@ def stream_sqlite(sqlite_chunks):
                 yield from process_if_buffered_or_remember(process_freelist_trunk_page, next_trunk)
 
         def process_freelist_leaf_page(page_bytes, page_reader):
-            yield from []
+            yield from ()
 
         def process_if_buffered_or_remember(process, page_num):
             try:
