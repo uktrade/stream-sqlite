@@ -1,9 +1,12 @@
+import collections
 import itertools
 import sqlite3
 import tempfile
 import unittest
 
 from stream_sqlite import stream_sqlite
+
+column_constructor = collections.namedtuple('Column', ('cid', 'name', 'type', 'notnull', 'dflt_value', 'pk'))
 
 
 class TestStreamSqlite(unittest.TestCase):
@@ -32,15 +35,15 @@ class TestStreamSqlite(unittest.TestCase):
                 self.assertEqual([(
                     "my_table_'1",
                     (
-                        {'cid': 0, 'name': 'my_text_col_a', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
-                        {'cid': 1, 'name': 'my_text_col_b', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
+                        column_constructor(cid=0, name='my_text_col_a', type='text', notnull=0, dflt_value=None, pk=0),
+                        column_constructor(cid=1, name='my_text_col_b', type='text', notnull=0, dflt_value=None, pk=0),
                     ),
-                    [{'my_text_col_a': 'some-text-a', 'my_text_col_b': 'some-text-b'}],
+                    [('some-text-a', 'some-text-b')],
                 ),(
                     "my_table_'2",
                     (
-                        {'cid': 0, 'name': 'my_text_col_a', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
-                        {'cid': 1, 'name': 'my_text_col_b', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
+                        column_constructor(cid=0, name='my_text_col_a', type='text', notnull=0, dflt_value=None, pk=0),
+                        column_constructor(cid=1, name='my_text_col_b', type='text', notnull=0, dflt_value=None, pk=0),
                     ),
                     [],
                 )], all_chunks)
@@ -60,27 +63,27 @@ class TestStreamSqlite(unittest.TestCase):
                 self.assertEqual([(
                     'my_table_1',
                     (
-                        {'cid': 0, 'name': 'my_text_col_a', 'type': 'integer', 'notnull': 0, 'dflt_value': None, 'pk': 0},
+                        column_constructor(cid=0, name='my_text_col_a', type='integer', notnull=0, dflt_value=None, pk=0),
                     ),
                     [
-                        {'my_text_col_a': 0},
-                        {'my_text_col_a': 1},
-                        {'my_text_col_a': 2},
-                        {'my_text_col_a': 65536},
-                        {'my_text_col_a': 16777216},
-                        {'my_text_col_a': 4294967296},
-                        {'my_text_col_a': 1099511627776},
-                        {'my_text_col_a': 281474976710656},
-                        {'my_text_col_a': 72057594037927936},
-                        {'my_text_col_a': 0},
-                        {'my_text_col_a': -1},
-                        {'my_text_col_a': -2},
-                        {'my_text_col_a': -65536},
-                        {'my_text_col_a': -16777216},
-                        {'my_text_col_a': -4294967296},
-                        {'my_text_col_a': -1099511627776},
-                        {'my_text_col_a': -281474976710656},
-                        {'my_text_col_a': -72057594037927936}]
+                        (0,),
+                        (1,),
+                        (2,),
+                        (65536,),
+                        (16777216,),
+                        (4294967296,),
+                        (1099511627776,),
+                        (281474976710656,),
+                        (72057594037927936,),
+                        (0,),
+                        (-1,),
+                        (-2,),
+                        (-65536,),
+                        (-16777216,),
+                        (-4294967296,),
+                        (-1099511627776,),
+                        (-281474976710656,),
+                        (-72057594037927936,)]
                 )], all_chunks)
 
     def test_many_small_tables(self):
@@ -97,15 +100,15 @@ class TestStreamSqlite(unittest.TestCase):
                 self.assertEqual([(
                     'my_table_1',
                     (
-                        {'cid': 0, 'name': 'my_text_col_a', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
-                        {'cid': 1, 'name': 'my_text_col_b', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
+                        column_constructor(cid=0, name='my_text_col_a', type='text', notnull=0, dflt_value=None, pk=0),
+                        column_constructor(cid=1, name='my_text_col_b', type='text', notnull=0, dflt_value=None, pk=0),
                     ),
-                    [{'my_text_col_a': 'some-text-a', 'my_text_col_b': 'some-text-b'}],
+                    [('some-text-a', 'some-text-b')],
                 )] + [(
                     'my_table_{}'.format(i),
                     (
-                        {'cid': 0, 'name': 'my_text_col_a', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
-                        {'cid': 1, 'name': 'my_text_col_b', 'type': 'text', 'notnull': 0, 'dflt_value': None, 'pk': 0},
+                        column_constructor(cid=0, name='my_text_col_a', type='text', notnull=0, dflt_value=None, pk=0),
+                        column_constructor(cid=1, name='my_text_col_b', type='text', notnull=0, dflt_value=None, pk=0),
                     ),
                     [],
                 ) for i in range(2, 101)], all_chunks)
@@ -124,7 +127,7 @@ class TestStreamSqlite(unittest.TestCase):
                 all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size)))
 
                 self.assertEqual(
-                    [{'my_text_col_a': 'some-text-a', 'my_text_col_b': 'some-text-b'}] * 1000,
+                    [('some-text-a', 'some-text-b')] * 1000,
                     all_chunks[0][2],
                 )
 
@@ -146,9 +149,9 @@ class TestStreamSqlite(unittest.TestCase):
                 self.assertEqual([(
                     "my_table_1",
                     (
-                        {'cid': 0, 'name': 'my_col_a', 'type': 'integer', 'notnull': 0, 'dflt_value': None, 'pk': 0},
+                        column_constructor(cid=0, name='my_col_a', type='integer', notnull=0, dflt_value=None, pk=0),
                     ),
-                    [{'my_col_a': i} for i in range(0, 1024)],
+                    [(i,) for i in range(0, 1024)],
                 )], all_chunks)
 
     def test_freelist(self):
