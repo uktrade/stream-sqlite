@@ -104,7 +104,7 @@ def stream_sqlite(sqlite_chunks):
 
     def yield_table_pages(page_nums_pages_readers, first_freelist_trunk_page):
         page_buffer = {}
-        page_types = {}
+        page_processors = {}
 
         def process_table_page(table_name, table_info, page_bytes, page_reader):
 
@@ -255,16 +255,16 @@ def stream_sqlite(sqlite_chunks):
             try:
                 page_bytes, page_reader = page_buffer.pop(page_num)
             except KeyError:
-                page_types[page_num] = process
+                page_processors[page_num] = process
             else:
                 yield from process(page_bytes, page_reader)
 
-        page_types[1] = partial(process_table_page, 'sqlite_schema', ())
-        page_types[first_freelist_trunk_page] = process_freelist_trunk_page
+        page_processors[1] = partial(process_table_page, 'sqlite_schema', ())
+        page_processors[first_freelist_trunk_page] = process_freelist_trunk_page
 
         for page_num, page_bytes, page_reader in page_nums_pages_readers:
             try:
-                process_page = page_types.pop(page_num)
+                process_page = page_processors.pop(page_num)
             except KeyError:
                 page_buffer[page_num] = (page_bytes, page_reader)
             else:
