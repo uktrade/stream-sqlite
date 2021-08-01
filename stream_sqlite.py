@@ -105,9 +105,8 @@ def stream_sqlite(sqlite_chunks):
     def yield_table_pages(page_nums_pages_readers, first_freelist_trunk_page):
         page_buffer = {}
         page_types = {}
-        master_table = {}
 
-        def process_table_page(table_name, page_bytes, page_reader):
+        def process_table_page(table_name, table_info, page_bytes, page_reader):
 
             def get_master_table(master_cells):
 
@@ -175,8 +174,7 @@ def stream_sqlite(sqlite_chunks):
                 pointers = unpack('>{}H'.format(num_cells), page_reader(num_cells * 2))
                 for table_or_index, table_name, table_info, root_page in get_master_table(yield_leaf_table_cells(pointers)):
                     if table_or_index == 'table':
-                        master_table[table_name] = table_info
-                        yield from process_if_buffered_or_remember(partial(process_table_page, table_name), root_page)
+                        yield from process_if_buffered_or_remember(partial(process_table_page, table_name, table_info), root_page)
                     else:
                         yield from process_if_buffered_or_remember(process_index_page, root_page)
 
@@ -185,7 +183,6 @@ def stream_sqlite(sqlite_chunks):
                     table_leaf_header.unpack(page_reader(7))
 
                 pointers = unpack('>{}H'.format(num_cells), page_reader(num_cells * 2))
-                table_info = master_table[table_name]
 
                 yield table_name, table_info, (
                     {
@@ -205,10 +202,10 @@ def stream_sqlite(sqlite_chunks):
                     cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
                     page_number, =  unsigned_long.unpack(cell_num_reader(4))
                     yield from process_if_buffered_or_remember(
-                        partial(process_table_page, table_name), page_number)
+                        partial(process_table_page, table_name, table_info), page_number)
 
                 yield from process_if_buffered_or_remember(
-                    partial(process_table_page, table_name), right_most_pointer)
+                    partial(process_table_page, table_name, table_info), right_most_pointer)
 
             page_type = page_reader(1)
             yield from (
@@ -262,7 +259,7 @@ def stream_sqlite(sqlite_chunks):
             else:
                 yield from process(page_bytes, page_reader)
 
-        page_types[1] = partial(process_table_page, 'sqlite_schema')
+        page_types[1] = partial(process_table_page, 'sqlite_schema', ())
         page_types[first_freelist_trunk_page] = process_freelist_trunk_page
 
         for page_num, page_bytes, page_reader in page_nums_pages_readers:
