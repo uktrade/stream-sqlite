@@ -178,7 +178,7 @@ def stream_sqlite(sqlite_chunks):
                         master_table[table_name] = table_info
                         yield from process_if_buffered_or_remember(partial(process_table_page, table_name), root_page)
                     else:
-                        yield from process_if_buffered_or_remember(partial(process_index_page, table_name), root_page)
+                        yield from process_if_buffered_or_remember(process_index_page, root_page)
 
             def process_table_leaf_non_master():
                 first_free_block, num_cells, cell_content_start, num_frag_free = \
@@ -217,7 +217,7 @@ def stream_sqlite(sqlite_chunks):
                 process_table_interior()
             )
 
-        def process_index_page(table_name, page_bytes, page_reader):
+        def process_index_page(page_bytes, page_reader):
 
             def process_index_leaf():
                 yield from ()
@@ -231,11 +231,9 @@ def stream_sqlite(sqlite_chunks):
                 for pointer in pointers:
                     cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
                     page_num, =  unsigned_long.unpack(cell_num_reader(4))
-                    yield from process_if_buffered_or_remember(
-                        partial(process_index_page, table_name), page_num)
+                    yield from process_if_buffered_or_remember(process_index_page, page_num)
 
-                yield from process_if_buffered_or_remember(
-                    partial(process_index_page, table_name), right_most_pointer)
+                yield from process_if_buffered_or_remember(process_index_page, right_most_pointer)
 
             page_type = page_reader(1)
             yield from (
