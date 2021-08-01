@@ -103,7 +103,12 @@ def stream_sqlite(sqlite_chunks):
             yield page_num, page_bytes, page_reader
 
     def yield_table_pages(page_nums_pages_readers, first_freelist_trunk_page):
+        # Map of page number -> bytes. Populated when we reach a page that
+        # can't be identified and so can't be processed.
         page_buffer = {}
+
+        # Map of page number -> page processor function. Populated when we
+        # identify a page, but don't have it in the buffer yet.
         page_processors = {}
 
         def process_table_page(table_name, table_info, page_bytes, page_reader):
