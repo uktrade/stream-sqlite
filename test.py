@@ -86,6 +86,28 @@ class TestStreamSqlite(unittest.TestCase):
                         (-72057594037927936,)]
                 )], all_chunks)
 
+    def test_floats(self):
+        for page_size, chunk_size in itertools.product(
+            [512, 1024, 4096, 8192, 16384, 32768, 65536],
+            [1, 2, 3, 5, 7, 32, 131072],
+        ):
+            with self.subTest(page_size=page_size, chunk_size=chunk_size):
+                sqls = [
+                    "CREATE TABLE my_table_1 (my_col_a real);",
+                    "INSERT INTO my_table_1 VALUES (0.5123), (-0.1)",
+                ]
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size)))
+                self.assertEqual([(
+                    'my_table_1',
+                    (
+                        column_constructor(cid=0, name='my_col_a', type='real', notnull=0, dflt_value=None, pk=0),
+                    ),
+                    [
+                        (0.5123,),
+                        (-0.1,),
+                    ]
+                )], all_chunks)
+
     def test_many_small_tables(self):
         for page_size, chunk_size in itertools.product(
             [512, 1024, 4096, 8192, 16384, 32768, 65536],

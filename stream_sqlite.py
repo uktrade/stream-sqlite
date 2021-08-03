@@ -13,6 +13,7 @@ def stream_sqlite(sqlite_chunks):
     unsigned_char = Struct('B')
     unsigned_short = Struct('>H')
     unsigned_long = Struct('>L')
+    double = Struct('>d')
     table_leaf_header = Struct('>HHHB')
     table_interior_header = Struct('>HHHBL')
     index_interior_header = Struct('>HHHBL')
@@ -186,6 +187,7 @@ def stream_sqlite(sqlite_chunks):
                             (4, lambda raw: int.from_bytes(raw, byteorder='big', signed=True)) if serial_type == 4 else \
                             (6, lambda raw: int.from_bytes(raw, byteorder='big', signed=True)) if serial_type == 5 else \
                             (8, lambda raw: int.from_bytes(raw, byteorder='big', signed=True)) if serial_type == 6 else \
+                            (8, lambda raw: double.unpack(raw)[0]) if serial_type == 7 else \
                             (0, lambda _: 0) if serial_type == 8 else \
                             (0, lambda _: 1) if serial_type == 9 else \
                             (int((serial_type - 12)/2), lambda raw: raw) if serial_type % 2 == 0 else \
