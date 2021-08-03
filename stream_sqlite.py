@@ -2,7 +2,7 @@ from collections import namedtuple
 from functools import partial
 from itertools import groupby
 from math import ceil
-from struct import Struct, unpack
+from struct import Struct
 from sqlite3 import connect
 
 
@@ -167,7 +167,7 @@ def stream_sqlite(sqlite_chunks):
                         yield h
                         header_remaining -= v_size
 
-                for pointer in pointers:
+                for pointer, in pointers:
                     cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
 
                     payload_size, _ = cell_varint_reader()
@@ -200,7 +200,7 @@ def stream_sqlite(sqlite_chunks):
                 _, num_cells, _, _ = \
                     table_leaf_header.unpack(page_reader(7))
 
-                pointers = unpack('>{}H'.format(num_cells), page_reader(num_cells * 2))
+                pointers = unsigned_short.iter_unpack(page_reader(num_cells * 2))
 
                 for table_or_index, table_name, (table_info, row_constructor), root_page in get_master_table(yield_leaf_table_cells(pointers)):
                     yield from (
@@ -212,7 +212,7 @@ def stream_sqlite(sqlite_chunks):
                 _, num_cells, _, _ = \
                     table_leaf_header.unpack(page_reader(7))
 
-                pointers = unpack('>{}H'.format(num_cells), page_reader(num_cells * 2))
+                pointers = unsigned_short.iter_unpack(page_reader(num_cells * 2))
 
                 yield table_name, table_info, (
                     row_constructor(*cell)
@@ -223,9 +223,9 @@ def stream_sqlite(sqlite_chunks):
                 _, num_cells, _, _, right_most_pointer = \
                     table_interior_header.unpack(page_reader(11))
 
-                pointers = unpack('>{}H'.format(num_cells), page_reader(num_cells * 2))
+                pointers = unsigned_short.iter_unpack(page_reader(num_cells * 2))
 
-                for pointer in pointers:
+                for pointer, in pointers:
                     cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
                     page_number, =  unsigned_long.unpack(cell_num_reader(4))
                     yield from process_if_buffered_or_remember(
@@ -250,9 +250,9 @@ def stream_sqlite(sqlite_chunks):
                 _, num_cells, _, _, right_most_pointer = \
                     index_interior_header.unpack(page_reader(11))
 
-                pointers = unpack('>{}H'.format(num_cells), page_reader(num_cells * 2))
+                pointers = unsigned_short.iter_unpack(page_reader(num_cells * 2))
 
-                for pointer in pointers:
+                for pointer, in pointers:
                     cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
                     page_num, =  unsigned_long.unpack(cell_num_reader(4))
                     yield from process_if_buffered_or_remember(process_index_page, page_num)
@@ -267,9 +267,9 @@ def stream_sqlite(sqlite_chunks):
 
         def process_freelist_trunk_page(page_bytes, page_reader):
             next_trunk, num_leaves = freelist_trunk_header.unpack(page_reader(8))
-            leaf_pages = unpack('>{}L'.format(num_leaves), page_reader(num_leaves * 4))
+            leaf_pages = unsigned_long.iter_unpack(page_reader(num_leaves * 4))
 
-            for page_num in leaf_pages:
+            for page_num, in leaf_pages:
                 yield from process_if_buffered_or_remember(process_freelist_leaf_page, page_num)
 
             if next_trunk != 0:
