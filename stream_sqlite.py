@@ -201,6 +201,7 @@ def stream_sqlite(sqlite_chunks):
                     table_leaf_header.unpack(page_reader(7))
 
                 pointers = unpack('>{}H'.format(num_cells), page_reader(num_cells * 2))
+
                 for table_or_index, table_name, (table_info, row_constructor), root_page in get_master_table(yield_leaf_table_cells(pointers)):
                     yield from (
                         process_if_buffered_or_remember(partial(process_table_page, table_name, table_info, row_constructor), root_page) if table_or_index == 'table' else \
