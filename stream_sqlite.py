@@ -197,7 +197,7 @@ def stream_sqlite(sqlite_chunks):
                     )
 
             def process_table_leaf_master():
-                first_free_block, num_cells, cell_content_start, num_frag_free = \
+                _, num_cells, _, _ = \
                     table_leaf_header.unpack(page_reader(7))
 
                 pointers = unpack('>{}H'.format(num_cells), page_reader(num_cells * 2))
@@ -208,7 +208,7 @@ def stream_sqlite(sqlite_chunks):
                     )
 
             def process_table_leaf_non_master():
-                first_free_block, num_cells, cell_content_start, num_frag_free = \
+                _, num_cells, _, _ = \
                     table_leaf_header.unpack(page_reader(7))
 
                 pointers = unpack('>{}H'.format(num_cells), page_reader(num_cells * 2))
@@ -219,7 +219,7 @@ def stream_sqlite(sqlite_chunks):
                 )
 
             def process_table_interior():
-                first_free_block, num_cells, cell_content_start, num_frag_free, right_most_pointer = \
+                _, num_cells, _, _, right_most_pointer = \
                     table_interior_header.unpack(page_reader(11))
 
                 pointers = unpack('>{}H'.format(num_cells), page_reader(num_cells * 2))
@@ -246,7 +246,7 @@ def stream_sqlite(sqlite_chunks):
                 yield from ()
 
             def process_index_interior():
-                first_free_block, num_cells, cell_content_start, num_frag_free, right_most_pointer = \
+                _, num_cells, _, _, right_most_pointer = \
                     index_interior_header.unpack(page_reader(11))
 
                 pointers = unpack('>{}H'.format(num_cells), page_reader(num_cells * 2))
