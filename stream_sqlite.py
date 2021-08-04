@@ -120,7 +120,14 @@ def stream_sqlite(sqlite_chunks):
             lock_byte_page_prev = (page_num - 1) == lock_byte_page
             lock_byte_page_curr = page_num == lock_byte_page
 
-            if ptrmap_page_curr or lock_byte_page_curr or (ptrmap_page_prev and lock_byte_page_prev):
+            # Keeping below separate so code coverage reveals which are not tested
+            if ptrmap_page_curr:
+                continue
+
+            if lock_byte_page_curr:
+                continue
+
+            if (ptrmap_page_prev and lock_byte_page_prev):
                 continue
 
             yield page_num, page_bytes, page_reader
