@@ -39,13 +39,6 @@ class TestStreamSqlite(unittest.TestCase):
                         column_constructor(cid=1, name='my_text_col_b', type='text', notnull=0, dflt_value=None, pk=0),
                     ),
                     [('some-text-a', 'some-text-b')],
-                ),(
-                    "my_table_'2",
-                    (
-                        column_constructor(cid=0, name='my_text_col_a', type='text', notnull=0, dflt_value=None, pk=0),
-                        column_constructor(cid=1, name='my_text_col_b', type='text', notnull=0, dflt_value=None, pk=0),
-                    ),
-                    [],
                 )], all_chunks)
 
     def test_integers(self):
@@ -114,26 +107,22 @@ class TestStreamSqlite(unittest.TestCase):
             [1, 2, 3, 5, 7, 32, 131072],
         ):
             with self.subTest(page_size=page_size, chunk_size=chunk_size):
-                sqls = [
-                    "CREATE TABLE my_table_{} (my_text_col_a text, my_text_col_b text);".format(i)
+                sqls = flatten((
+                    [
+                        "CREATE TABLE my_table_{} (my_text_col_a text, my_text_col_b text);".format(i),
+                        "INSERT INTO my_table_{} VALUES ('some-text-a', 'some-text-b');".format(i),
+                    ]
                     for i in range(1, 101)
-                ] + ["INSERT INTO my_table_1 VALUES ('some-text-a', 'some-text-b')"]
+                ))
                 all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size)))
                 self.assertEqual([(
-                    'my_table_1',
-                    (
-                        column_constructor(cid=0, name='my_text_col_a', type='text', notnull=0, dflt_value=None, pk=0),
-                        column_constructor(cid=1, name='my_text_col_b', type='text', notnull=0, dflt_value=None, pk=0),
-                    ),
-                    [('some-text-a', 'some-text-b')],
-                )] + [(
                     'my_table_{}'.format(i),
                     (
                         column_constructor(cid=0, name='my_text_col_a', type='text', notnull=0, dflt_value=None, pk=0),
                         column_constructor(cid=1, name='my_text_col_b', type='text', notnull=0, dflt_value=None, pk=0),
                     ),
-                    [],
-                ) for i in range(2, 101)], all_chunks)
+                    [('some-text-a', 'some-text-b')],
+                ) for i in range(1, 101)], all_chunks)
 
     def test_large_table(self):
         for page_size, chunk_size in itertools.product(
@@ -209,7 +198,7 @@ class TestStreamSqlite(unittest.TestCase):
         ]
         all_chunks = tables_list(stream_sqlite(db(sqls, page_size=1024, chunk_size=131072)))
 
-        self.assertEqual([], all_chunks[0][2])
+        self.assertEqual([], all_chunks)
 
     def test_truncated(self):
         with self.assertRaises(ValueError):
@@ -273,4 +262,12 @@ def tables_list(table_iter):
     return [
         (table_name, table_info, list(table_rows))
         for table_name, table_info, table_rows in table_iter
+    ]
+
+
+def flatten(l):
+    return [
+        item
+        for sublist in l
+        for item in sublist
     ]

@@ -132,7 +132,7 @@ def stream_sqlite(sqlite_chunks):
 
             yield page_num, page_bytes, page_reader
 
-    def yield_table_pages(page_nums_pages_readers, first_freelist_trunk_page):
+    def yield_table_rows(page_nums_pages_readers, first_freelist_trunk_page):
         # Map of page number -> bytes. Populated when we reach a page that
         # can't be identified and so can't be processed.
         page_buffer = {}
@@ -221,10 +221,8 @@ def stream_sqlite(sqlite_chunks):
 
                 pointers = unsigned_short.iter_unpack(page_reader(num_cells * 2))
 
-                yield table_name, table_info, (
-                    row_constructor(*cell)
-                    for cell in yield_leaf_table_cells(pointers)
-                )
+                for cell in yield_leaf_table_cells(pointers):
+                    yield table_name, table_info, row_constructor(*cell)
 
             def process_table_interior():
                 _, num_cells, _, _, right_most_pointer = \
@@ -312,20 +310,16 @@ def stream_sqlite(sqlite_chunks):
         if len(page_processors) != 0:
             raise ValueError("Expected a page that wasn't processed")
 
-    def group_by_table(table_pages):
-        grouped_by_name = groupby(
-            table_pages, key=lambda name_info_pages: (name_info_pages[0], name_info_pages[1]))
+    def group_by_table(table_rows):
+        grouped_by_table = groupby(table_rows,
+            key=lambda name_info_row: (name_info_row[0], name_info_row[1]))
 
-        def _rows(single_table_pages):
-            for _, _, table_rows in single_table_pages:
-                yield from table_rows
-
-        for (name, info), single_table_pages in grouped_by_name:
-            yield name, info, _rows(single_table_pages)
+        for (name, info), single_table_rows in grouped_by_table:
+            yield name, info, (row for (_, _, row) in single_table_rows)
 
     get_bytes = get_byte_reader(sqlite_chunks)
     page_size, num_pages_expected, first_freelist_trunk_page, incremental_vacuum = parse_header(get_bytes(100))
 
     page_nums_pages_readers = yield_page_nums_pages_readers(get_bytes, page_size, num_pages_expected, incremental_vacuum)
-    table_pages = yield_table_pages(page_nums_pages_readers, first_freelist_trunk_page)
-    yield from group_by_table(table_pages)
+    table_rows = yield_table_rows(page_nums_pages_readers, first_freelist_trunk_page)
+    yield from group_by_table(table_rows)
