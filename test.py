@@ -41,6 +41,28 @@ class TestStreamSqlite(unittest.TestCase):
                     [('some-text-a', 'some-text-b')],
                 )], all_chunks)
 
+    def test_overflow(self):
+        for page_size, chunk_size in itertools.product(
+            [512],
+            [131072],
+        ):
+            with self.subTest(page_size=page_size, chunk_size=chunk_size):
+                for i  in range(1, 10001):
+                    sqls = [
+                        "CREATE TABLE my_table_1 (my_text_col_a text);",
+                        "INSERT INTO my_table_1 VALUES ('" + ('-' * i) + "')"
+                    ]
+                    all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size)))
+                    self.assertEqual([(
+                        "my_table_1",
+                        (
+                            column_constructor(cid=0, name='my_text_col_a', type='text', notnull=0, dflt_value=None, pk=0),
+                        ),
+                        [
+                            ('-' * i,)
+                        ],
+                    )], all_chunks)
+
     def test_integers(self):
         for page_size, chunk_size in itertools.product(
             [512, 1024, 4096, 8192, 16384, 32768, 65536],

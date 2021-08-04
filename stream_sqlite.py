@@ -1,4 +1,4 @@
-from collections import namedtuple
+from collections import deque, namedtuple
 from functools import partial
 from itertools import groupby
 from math import ceil
@@ -146,13 +146,40 @@ def stream_sqlite(sqlite_chunks):
 
             def yield_leaf_table_rows(pointers):
 
+                def get_payload_size_on_leaf(p):
+                    u = len(page_bytes)
+                    x = u - 35
+                    m = (32 * (u - 12) // 255 - 23)
+                    k = (m + (p - m) % (u - 4))
+
+                    return (
+                        p if p <= x else \
+                        k if k <= x else \
+                        m
+                    )
+
                 for pointer, in pointers:
                     cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
 
                     payload_size, _ = cell_varint_reader()
                     rowid, _ = cell_varint_reader()
 
-                    yield read_table_row(cell_num_reader, cell_varint_reader)
+                    payload_size_on_leaf = get_payload_size_on_leaf(payload_size)
+
+                    if payload_size_on_leaf == payload_size:
+                        yield read_table_row(cell_num_reader, cell_varint_reader)
+
+                    else:
+                        payload_first_chunk = cell_num_reader(payload_size_on_leaf)
+                        overflow_page, = unsigned_long.unpack(cell_num_reader(4))
+                        payload_chunks = deque()
+                        payload_chunks.append(payload_first_chunk)
+                        payload_remainder = payload_size - payload_size_on_leaf
+
+                        yield from process_if_buffered_or_remember(partial(
+                            process_overflow_leaf_table_page,
+                            table_name, table_info, row_constructor, payload_chunks, payload_remainder
+                        ), overflow_page)
 
             def read_table_row(cell_num_reader, cell_varint_reader):
 
@@ -215,6 +242,21 @@ def stream_sqlite(sqlite_chunks):
 
                 for row in yield_leaf_table_rows(pointers):
                     yield table_name, table_info, row
+
+            def process_overflow_leaf_table_page(table_name, table_info, row_constructor, payload_chunks, payload_remainder, page_bytes, page_reader):
+                next_overflow_page, = unsigned_long.unpack(page_reader(4))
+                num_this_page = min(payload_remainder, len(page_bytes) - 4)
+                payload_remainder -= num_this_page
+                payload_chunks.append(page_reader(num_this_page))
+
+                if not next_overflow_page:
+                    yield table_name, table_info, read_table_row(*get_chunk_readers(b''.join(payload_chunks)))
+
+                else:
+                    yield from process_if_buffered_or_remember(partial(
+                        process_overflow_leaf_table_page,
+                        table_name, table_info, row_constructor, payload_chunks, payload_remainder
+                    ), next_overflow_page)
 
             def process_table_interior():
                 _, num_cells, _, _, right_most_pointer = \
