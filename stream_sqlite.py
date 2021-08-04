@@ -287,7 +287,9 @@ def stream_sqlite(sqlite_chunks):
                 yield from process(page_bytes, page_reader)
 
         page_processors[1] = partial(process_table_page, 'sqlite_schema', (), column_constructor)
-        page_processors[first_freelist_trunk_page] = process_freelist_trunk_page
+
+        if first_freelist_trunk_page:
+            page_processors[first_freelist_trunk_page] = process_freelist_trunk_page
 
         for page_num, page_bytes, page_reader in page_nums_pages_readers:
             try:
@@ -299,6 +301,9 @@ def stream_sqlite(sqlite_chunks):
 
         if len(page_buffer) != 0:
             raise ValueError('Unidentified pages in buffer')
+
+        if len(page_processors) != 0:
+            raise ValueError("Expected a page that wasn't processed")
 
     def group_by_table(table_pages):
         grouped_by_name = groupby(
