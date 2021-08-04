@@ -207,8 +207,7 @@ def stream_sqlite(sqlite_chunks):
                         )
 
             def process_table_leaf_non_master():
-                _, num_cells, _, _ = \
-                    table_leaf_header.unpack(page_reader(7))
+                _, num_cells, _, _ = table_leaf_header.unpack(page_reader(7))
 
                 pointers = unsigned_short.iter_unpack(page_reader(num_cells * 2))
 
