@@ -19,6 +19,7 @@ def stream_sqlite(sqlite_chunks):
     index_interior_header = Struct('>HHHBL')
     freelist_trunk_header = Struct('>LL')
 
+    master_row_constructor = namedtuple('MasterRow', ('type', 'name', 'tbl_name', 'rootpage', 'sql'))
     column_constructor = namedtuple('Column', ('cid', 'name', 'type', 'notnull', 'dflt_value', 'pk'))
 
     def get_byte_reader(iterable):
@@ -143,11 +144,10 @@ def stream_sqlite(sqlite_chunks):
 
         def process_table_page(table_name, table_info, row_constructor, page_bytes, page_reader):
 
-            def get_master_table(master_cells):
-
-                def table_info_and_row_constructor(cur, table_name, sql):
-                    cur.execute(sql)
-                    cur.execute("PRAGMA table_info('" + table_name.replace("'","''") + "');")
+            def get_master_table(master_rows):
+                def table_info_and_row_constructor(cur, master_row):
+                    cur.execute(master_row.sql)
+                    cur.execute("PRAGMA table_info('" + master_row.name.replace("'","''") + "');")
                     columns = cur.fetchall()
                     row_constructor = namedtuple('Row', (column[1] for column in columns))
                     return tuple(column_constructor(*column) for column in columns), row_constructor
@@ -157,16 +157,16 @@ def stream_sqlite(sqlite_chunks):
 
                     return tuple(
                         (
-                            cell[0],  # table or index
-                            cell[1],  # table name
-                            table_info_and_row_constructor(cur, cell[1], cell[4]) if cell[0] == 'table' else (None, None),
-                            cell[3],  # root page
+                            master_row.type,
+                            master_row.name,
+                            table_info_and_row_constructor(cur, master_row) if master_row.type == 'table' else (None, None),
+                            master_row.rootpage,
                         )
-                        for cell in master_cells
-                        if cell[0] in ('table', 'index')
+                        for master_row in master_rows
+                        if master_row.type in ('table', 'index')
                     )
 
-            def yield_leaf_table_cells(pointers):
+            def yield_leaf_table_rows(pointers):
 
                 for pointer, in pointers:
                     cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
@@ -187,7 +187,7 @@ def stream_sqlite(sqlite_chunks):
                 header_remaining, header_varint_size = cell_varint_reader()
                 header_remaining -= header_varint_size
 
-                return tuple(
+                return row_constructor(*tuple(
                     parser(cell_num_reader(length))
                     for serial_type in tuple(serial_types(header_remaining, cell_varint_reader))
                     for (length, parser) in (
@@ -205,7 +205,7 @@ def stream_sqlite(sqlite_chunks):
                         (int((serial_type - 13)/2), lambda raw: raw.decode()) if serial_type % 2 == 1 else \
                         (None, None),
                     )
-                )
+                ))
 
             def process_table_leaf_master():
                 _, num_cells, _, _ = \
@@ -213,7 +213,7 @@ def stream_sqlite(sqlite_chunks):
 
                 pointers = unsigned_short.iter_unpack(page_reader(num_cells * 2))
 
-                for table_or_index, table_name, (table_info, row_constructor), root_page in get_master_table(yield_leaf_table_cells(pointers)):
+                for table_or_index, table_name, (table_info, row_constructor), root_page in get_master_table(yield_leaf_table_rows(pointers)):
                     yield from (
                         process_if_buffered_or_remember(partial(process_table_page, table_name, table_info, row_constructor), root_page) if table_or_index == 'table' else \
                         process_if_buffered_or_remember(process_index_page, root_page)
@@ -225,8 +225,8 @@ def stream_sqlite(sqlite_chunks):
 
                 pointers = unsigned_short.iter_unpack(page_reader(num_cells * 2))
 
-                for cell in yield_leaf_table_cells(pointers):
-                    yield table_name, table_info, row_constructor(*cell)
+                for row in yield_leaf_table_rows(pointers):
+                    yield table_name, table_info, row
 
             def process_table_interior():
                 _, num_cells, _, _, right_most_pointer = \
@@ -295,7 +295,7 @@ def stream_sqlite(sqlite_chunks):
             else:
                 yield from process(page_bytes, page_reader)
 
-        page_processors[1] = partial(process_table_page, 'sqlite_schema', (), column_constructor)
+        page_processors[1] = partial(process_table_page, 'sqlite_schema', (), master_row_constructor)
 
         if first_freelist_trunk_page:
             page_processors[first_freelist_trunk_page] = process_freelist_trunk_page
