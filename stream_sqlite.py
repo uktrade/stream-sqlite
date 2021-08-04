@@ -199,7 +199,9 @@ def stream_sqlite(sqlite_chunks):
                 with connect(':memory:') as con:
                     cur = con.cursor()
 
-                    for master_row in yield_leaf_table_rows(unsigned_short.iter_unpack(page_reader(num_cells * 2))):
+                    pointers = unsigned_short.iter_unpack(page_reader(num_cells * 2))
+
+                    for master_row in yield_leaf_table_rows(pointers):
                         yield from (
                             process_if_buffered_or_remember(partial(process_table_page, master_row.name, *table_info_and_row_constructor(cur, master_row)), master_row.rootpage) if master_row.type == 'table' else \
                             process_if_buffered_or_remember(process_index_page, master_row.rootpage) if master_row.type == 'index' else \
