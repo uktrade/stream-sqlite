@@ -144,28 +144,6 @@ def stream_sqlite(sqlite_chunks):
 
         def process_table_page(table_name, table_info, row_constructor, page_bytes, page_reader):
 
-            def get_master_table(master_rows):
-                def table_info_and_row_constructor(cur, master_row):
-                    cur.execute(master_row.sql)
-                    cur.execute("PRAGMA table_info('" + master_row.name.replace("'","''") + "');")
-                    columns = cur.fetchall()
-                    row_constructor = namedtuple('Row', (column[1] for column in columns))
-                    return tuple(column_constructor(*column) for column in columns), row_constructor
-
-                with connect(':memory:') as con:
-                    cur = con.cursor()
-
-                    return tuple(
-                        (
-                            master_row.type,
-                            master_row.name,
-                            table_info_and_row_constructor(cur, master_row) if master_row.type == 'table' else (None, None),
-                            master_row.rootpage,
-                        )
-                        for master_row in master_rows
-                        if master_row.type in ('table', 'index')
-                    )
-
             def yield_leaf_table_rows(pointers):
 
                 for pointer, in pointers:
@@ -208,16 +186,25 @@ def stream_sqlite(sqlite_chunks):
                 ))
 
             def process_table_leaf_master():
-                _, num_cells, _, _ = \
-                    table_leaf_header.unpack(page_reader(7))
 
-                pointers = unsigned_short.iter_unpack(page_reader(num_cells * 2))
+                def table_info_and_row_constructor(cur, master_row):
+                    cur.execute(master_row.sql)
+                    cur.execute("PRAGMA table_info('" + master_row.name.replace("'","''") + "');")
+                    columns = cur.fetchall()
+                    row_constructor = namedtuple('Row', (column[1] for column in columns))
+                    return tuple(column_constructor(*column) for column in columns), row_constructor
 
-                for table_or_index, table_name, (table_info, row_constructor), root_page in get_master_table(yield_leaf_table_rows(pointers)):
-                    yield from (
-                        process_if_buffered_or_remember(partial(process_table_page, table_name, table_info, row_constructor), root_page) if table_or_index == 'table' else \
-                        process_if_buffered_or_remember(process_index_page, root_page)
-                    )
+                _, num_cells, _, _ = table_leaf_header.unpack(page_reader(7))
+
+                with connect(':memory:') as con:
+                    cur = con.cursor()
+
+                    for master_row in yield_leaf_table_rows(unsigned_short.iter_unpack(page_reader(num_cells * 2))):
+                        yield from (
+                            process_if_buffered_or_remember(partial(process_table_page, master_row.name, *table_info_and_row_constructor(cur, master_row)), master_row.rootpage) if master_row.type == 'table' else \
+                            process_if_buffered_or_remember(process_index_page, master_row.rootpage) if master_row.type == 'index' else \
+                            ()
+                        )
 
             def process_table_leaf_non_master():
                 _, num_cells, _, _ = \
