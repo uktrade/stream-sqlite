@@ -6,7 +6,7 @@ from struct import Struct
 from sqlite3 import connect
 
 
-def stream_sqlite(sqlite_chunks):
+def stream_sqlite(sqlite_chunks, buffer_size):
     LEAF_INDEX = b'\x0a'
     LEAF_TABLE = b'\x0d'
 
@@ -142,6 +142,20 @@ def stream_sqlite(sqlite_chunks):
         # identify a page, but don't have it in the buffer yet.
         page_processors = {}
 
+        # Bytes currently in the page_buffer, and all of the deques that store
+        # overflow pages in the partially applied page_processors
+        num_bytes_buffered = 0
+
+        def note_increase_buffered(num_bytes):
+            nonlocal num_bytes_buffered
+            num_bytes_buffered += num_bytes
+            if num_bytes_buffered > buffer_size:
+                raise ValueError('SQLite file requires a larger buffer_size')
+
+        def note_decrease_buffered(num_bytes):
+            nonlocal num_bytes_buffered
+            num_bytes_buffered -= num_bytes
+
         def process_table_page(table_name, table_info, row_constructor, page_bytes, page_reader):
 
             def yield_leaf_table_rows(pointers):
@@ -173,6 +187,7 @@ def stream_sqlite(sqlite_chunks):
                         payload_first_chunk = cell_num_reader(payload_size_on_leaf)
                         overflow_page, = unsigned_long.unpack(cell_num_reader(4))
                         payload_chunks = deque()
+                        note_increase_buffered(len(payload_first_chunk))
                         payload_chunks.append(payload_first_chunk)
                         payload_remainder = payload_size - payload_size_on_leaf
 
@@ -247,10 +262,13 @@ def stream_sqlite(sqlite_chunks):
                 next_overflow_page, = unsigned_long.unpack(page_reader(4))
                 num_this_page = min(payload_remainder, len(page_bytes) - 4)
                 payload_remainder -= num_this_page
+                note_increase_buffered(num_this_page)
                 payload_chunks.append(page_reader(num_this_page))
 
                 if not next_overflow_page:
-                    yield table_name, table_info, read_table_row(*get_chunk_readers(b''.join(payload_chunks)))
+                    payload = b''.join(payload_chunks)
+                    note_decrease_buffered(len(payload))
+                    yield table_name, table_info, read_table_row(*get_chunk_readers(payload))
 
                 else:
                     yield from process_if_buffered_or_remember(partial(
@@ -323,6 +341,7 @@ def stream_sqlite(sqlite_chunks):
             except KeyError:
                 page_processors[page_num] = process
             else:
+                note_decrease_buffered(len(page_bytes))
                 yield from process(page_bytes, page_reader)
 
         page_processors[1] = partial(process_table_page, 'sqlite_schema', (), master_row_constructor)
@@ -334,6 +353,7 @@ def stream_sqlite(sqlite_chunks):
             try:
                 process_page = page_processors.pop(page_num)
             except KeyError:
+                note_increase_buffered(len(page_bytes))
                 page_buffer[page_num] = (page_bytes, page_reader)
             else:
                 yield from process_page(page_bytes, page_reader)
@@ -343,6 +363,9 @@ def stream_sqlite(sqlite_chunks):
 
         if len(page_processors) != 0:
             raise ValueError("Expected a page that wasn't processed")
+
+        if num_bytes_buffered != 0:
+            raise ValueError('Bytes remain in cache')
 
     get_bytes = get_byte_reader(sqlite_chunks)
     page_size, num_pages_expected, first_freelist_trunk_page, incremental_vacuum = parse_header(get_bytes(100))
