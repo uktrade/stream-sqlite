@@ -6,7 +6,7 @@ from struct import Struct
 from sqlite3 import connect
 
 
-def stream_sqlite(sqlite_chunks, buffer_size):
+def stream_sqlite(sqlite_chunks, max_buffer_size):
     LEAF_INDEX = b'\x0a'
     LEAF_TABLE = b'\x0d'
 
@@ -149,8 +149,8 @@ def stream_sqlite(sqlite_chunks, buffer_size):
         def note_increase_buffered(num_bytes):
             nonlocal num_bytes_buffered
             num_bytes_buffered += num_bytes
-            if num_bytes_buffered > buffer_size:
-                raise ValueError('SQLite file requires a larger buffer_size')
+            if num_bytes_buffered > max_buffer_size:
+                raise ValueError('SQLite file requires a larger max_buffer_size')
 
         def note_decrease_buffered(num_bytes):
             nonlocal num_bytes_buffered
