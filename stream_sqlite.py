@@ -268,13 +268,16 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                 if not next_overflow_page:
                     payload = b''.join(payload_chunks)
                     note_decrease_buffered(len(payload))
-                    yield table_name, table_info, read_table_row(*get_chunk_readers(payload))
+                    yield from non_master_leaf_row(table_name, table_info, payload)
 
                 else:
                     yield from process_if_buffered_or_remember(partial(
                         process_overflow_leaf_table_page,
                         table_name, table_info, row_constructor, payload_chunks, payload_remainder
                     ), next_overflow_page)
+
+            def non_master_leaf_row(table_name, table_info, payload):
+                yield table_name, table_info, read_table_row(*get_chunk_readers(payload))
 
             def process_table_interior():
                 _, num_cells, _, _, right_most_pointer = \
