@@ -193,6 +193,24 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                         full_payload_processor, payload_chunks, payload_remainder
                     ), overflow_page)
 
+            def process_overflow_page(full_payload_processor, payload_chunks, payload_remainder, page_bytes, page_reader):
+                next_overflow_page, = unsigned_long.unpack(page_reader(4))
+                num_this_page = min(payload_remainder, len(page_bytes) - 4)
+                payload_remainder -= num_this_page
+                note_increase_buffered(num_this_page)
+                payload_chunks.append(page_reader(num_this_page))
+
+                if not next_overflow_page:
+                    payload = b''.join(payload_chunks)
+                    note_decrease_buffered(len(payload))
+                    yield from full_payload_processor(*get_chunk_readers(payload))
+
+                else:
+                    yield from process_if_buffered_or_remember(partial(
+                        process_overflow_page,
+                        full_payload_processor, payload_chunks, payload_remainder
+                    ), next_overflow_page)
+
             def read_table_row(cell_num_reader, cell_varint_reader):
 
                 def serial_types(header_remaining, cell_varint_reader):
@@ -270,24 +288,6 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                         process_non_master_leaf_row,
                         cell_num_reader, cell_varint_reader,
                     )
-
-            def process_overflow_page(full_payload_processor, payload_chunks, payload_remainder, page_bytes, page_reader):
-                next_overflow_page, = unsigned_long.unpack(page_reader(4))
-                num_this_page = min(payload_remainder, len(page_bytes) - 4)
-                payload_remainder -= num_this_page
-                note_increase_buffered(num_this_page)
-                payload_chunks.append(page_reader(num_this_page))
-
-                if not next_overflow_page:
-                    payload = b''.join(payload_chunks)
-                    note_decrease_buffered(len(payload))
-                    yield from full_payload_processor(*get_chunk_readers(payload))
-
-                else:
-                    yield from process_if_buffered_or_remember(partial(
-                        process_overflow_page,
-                        full_payload_processor, payload_chunks, payload_remainder
-                    ), next_overflow_page)
 
             def process_table_interior():
                 _, num_cells, _, _, right_most_pointer = \
