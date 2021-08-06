@@ -160,7 +160,7 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
 
             def process_initial_payload(full_payload_processor, cell_num_reader, cell_varint_reader):
 
-                def get_payload_size_on_leaf(p):
+                def get_initial_payload_size(p):
                     u = len(page_bytes)
                     x = u - 35
                     m = 32 * (u - 12) // 255 - 23
@@ -172,21 +172,21 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                         m
                     )
 
-                payload_size, _ = cell_varint_reader()
+                full_payload_size, _ = cell_varint_reader()
                 rowid, _ = cell_varint_reader()
 
-                payload_size_on_leaf = get_payload_size_on_leaf(payload_size)
+                initial_payload_size = get_initial_payload_size(full_payload_size)
 
-                if payload_size_on_leaf == payload_size:
+                if initial_payload_size == full_payload_size:
                     yield from full_payload_processor(cell_num_reader, cell_varint_reader)
 
                 else:
-                    payload_first_chunk = cell_num_reader(payload_size_on_leaf)
+                    initial_payload = cell_num_reader(initial_payload_size)
                     overflow_page, = unsigned_long.unpack(cell_num_reader(4))
                     payload_chunks = deque()
-                    note_increase_buffered(len(payload_first_chunk))
-                    payload_chunks.append(payload_first_chunk)
-                    payload_remainder = payload_size - payload_size_on_leaf
+                    note_increase_buffered(len(initial_payload))
+                    payload_chunks.append(initial_payload)
+                    payload_remainder = full_payload_size - initial_payload_size
 
                     yield from process_if_buffered_or_remember(partial(
                         process_overflow_page,
