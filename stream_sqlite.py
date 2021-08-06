@@ -163,8 +163,8 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                 def get_payload_size_on_leaf(p):
                     u = len(page_bytes)
                     x = u - 35
-                    m = (32 * (u - 12) // 255 - 23)
-                    k = (m + (p - m) % (u - 4))
+                    m = 32 * (u - 12) // 255 - 23
+                    k = m + (p - m) % (u - 4)
 
                     return (
                         p if p <= x else \
