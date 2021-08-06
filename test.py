@@ -41,7 +41,29 @@ class TestStreamSqlite(unittest.TestCase):
                     [('some-text-a', 'some-text-b')],
                 )], all_chunks)
 
-    def test_overflow(self):
+    def test_overflow_master(self):
+        for page_size, chunk_size in itertools.product(
+            [512],
+            [131072],
+        ):
+            column_name = "my_text_col_" + ('a' * 10000)
+            with self.subTest(page_size=page_size, chunk_size=chunk_size):
+                sqls = [
+                    "CREATE TABLE my_table_1 ({} text);".format(column_name),
+                    "INSERT INTO my_table_1 VALUES ('a')".format(column_name),
+                ]
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=20971520))
+                self.assertEqual([(
+                    "my_table_1",
+                    (
+                        column_constructor(cid=0, name=column_name, type='text', notnull=0, dflt_value=None, pk=0),
+                    ),
+                    [
+                        ('a',)
+                    ],
+                )], all_chunks)
+
+    def test_overflow_non_master(self):
         for page_size, chunk_size in itertools.product(
             [512],
             [131072],
