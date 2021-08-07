@@ -452,6 +452,32 @@ class TestStreamSqlite(unittest.TestCase):
 
         self.assertEqual(count, 1200000)
 
+    def test_lock_byte_page_with_autovaccum(self):
+        def get_file_bytes():
+            with open('fixtures/large-autovacuum-1024.sqlite.gz', 'rb') as f:
+                while True:
+                    chunk = f.read(131072)
+                    if not chunk:
+                        break
+                    yield chunk
+
+        def get_sqlite_bytes(file_bytes):
+            obj = zlib.decompressobj(32 + zlib.MAX_WBITS)
+            for gzipped_chunk in file_bytes:
+                chunk = obj.decompress(gzipped_chunk)
+                if chunk:
+                    yield chunk
+
+        file_bytes = get_file_bytes()
+        sqlite_bytes = get_sqlite_bytes(file_bytes)
+
+        count = 0
+        for table_row, table_info, rows in stream_sqlite(sqlite_bytes, max_buffer_size=209715200):
+            for row in rows:
+                count += 1
+
+        self.assertEqual(count, 1200000)
+
 def db(sqls, page_size, chunk_size):
     with tempfile.NamedTemporaryFile() as fp:
         with sqlite3.connect(fp.name, isolation_level=None) as con:
