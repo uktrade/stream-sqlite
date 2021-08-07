@@ -319,7 +319,7 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
 
             def get_index_initial_payload_size(p):
                 u = len(page_bytes)
-                x = (u - 12 ) * 64 // 255 -23
+                x = 64 * (u - 12) // 255 - 23
                 m = 32 * (u - 12) // 255 - 23
                 k = m + (p - m) % (u - 4)
 
