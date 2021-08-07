@@ -8,7 +8,7 @@ def long_description():
 
 setuptools.setup(
     name='stream-sqlite',
-    version='0.0.35',
+    version='0.0.36',
     author='Department for International Trade',
     author_email='sre@digital.trade.gov.uk',
     description='Python function to extract all the rows from a SQLite database file concurrently with iterating over its bytes, without needing random access to the file',
