@@ -125,6 +125,44 @@ class TestStreamSqlite(unittest.TestCase):
                         (-72057594037927936,)]
                 )], all_chunks)
 
+    def test_integers_primary_key(self):
+        for page_size, chunk_size in itertools.product(
+            [512, 1024, 4096, 8192, 16384, 32768, 65536],
+            [1, 2, 3, 5, 7, 32, 131072],
+        ):
+            with self.subTest(page_size=page_size, chunk_size=chunk_size):
+                sqls = [
+                    "CREATE TABLE my_table_1 (m integer primary key);",
+                    "INSERT INTO my_table_1 VALUES (0),(1),(2),(65536),(16777216),(4294967296),(1099511627776),(281474976710656),(72057594037927936)",
+                    "INSERT INTO my_table_1 VALUES (-1),(-2),(-65536),(-16777216),(-4294967296),(-1099511627776),(-281474976710656),(-72057594037927936)",
+                ]
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=0))
+                self.assertEqual([(
+                    'my_table_1',
+                    (
+                        column_constructor(cid=0, name='m', type='integer', notnull=0, dflt_value=None, pk=1),
+                    ),
+                    [
+                        (-72057594037927936,),
+                        (-281474976710656,),
+                        (-1099511627776,),
+                        (-4294967296,),
+                        (-16777216,),
+                        (-65536,),
+                        (-2,),
+                        (-1,),
+                        (0,),
+                        (1,),
+                        (2,),
+                        (65536,),
+                        (16777216,),
+                        (4294967296,),
+                        (1099511627776,),
+                        (281474976710656,),
+                        (72057594037927936,),
+                    ]
+                )], all_chunks)
+
     def test_floats(self):
         for page_size, chunk_size in itertools.product(
             [512, 1024, 4096, 8192, 16384, 32768, 65536],

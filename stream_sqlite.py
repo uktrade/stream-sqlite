@@ -68,21 +68,25 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
             return chunk[p_orig:p_orig+num]
 
         def _get_varint():
-            # This probably doesn't work with negative numbers
             nonlocal p
-            
+
             value = 0
             high_bit = 1
             i = 0
 
             while high_bit and i < 9:
-                high_bit = chunk[p] >> 7
+                high_bit = chunk[p] & 0x80
                 value = \
                     ((value << 8) + chunk[p]) if i == 8 else \
                     ((value << 7) + (chunk[p] & 0x7F))
 
                 i += 1
                 p += 1
+
+            is_negative = value & 0x8000000000000000
+            value = \
+                value if not is_negative else \
+                -1 * (~(value - 1) & 0xFFFFFFFFFFFFFFFF)
 
             return value, i
 
