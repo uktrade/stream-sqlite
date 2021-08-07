@@ -40,3 +40,5 @@ for table_name, table_info, rows in stream_sqlite(sqlite_bytes(), max_buffer_siz
 If you have control over the SQLite file, `VACUUM;` should be run on it before streaming. In addition to minimising the size of the file, `VACUUM;` arranges the pages in a way that often reduces the buffering required when streaming. This is especially true if it was the target of intermingled `INSERT`s and/or `DELETE`s over multiple tables.
 
 Also, indexes are not used for extracting the rows while streaming. If streaming is the only use case of the SQLite file, and you have control over it, indexes should be removed, and `VACUUM;` then run.
+
+Some tests suggest that if the file is written in autovacuum mode, i.e. `PRAGMA auto_vacuum = FULL;`, then the pages are arranged in a way that reduces the buffering required when streaming. Your mileage may vary.
