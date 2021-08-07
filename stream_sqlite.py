@@ -19,7 +19,7 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
     index_interior_header = Struct('>HHHBL')
     freelist_trunk_header = Struct('>LL')
 
-    master_row_constructor = namedtuple('MasterRow', ('type', 'name', 'tbl_name', 'rootpage', 'sql'))
+    master_row_constructor = namedtuple('MasterRow', ('rowid', 'type', 'name', 'tbl_name', 'rootpage', 'sql'))
     column_constructor = namedtuple('Column', ('cid', 'name', 'type', 'notnull', 'dflt_value', 'pk'))
 
     def get_byte_reader(iterable):
@@ -158,25 +158,21 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
 
         def process_table_page(table_name, table_info, row_constructor, page_bytes, page_reader):
 
-            def process_initial_payload(full_payload_processor, cell_num_reader, cell_varint_reader):
+            def get_table_initial_payload_size(p):
+                u = len(page_bytes)
+                x = u - 35
+                m = 32 * (u - 12) // 255 - 23
+                k = m + (p - m) % (u - 4)
 
-                def get_initial_payload_size(p):
-                    u = len(page_bytes)
-                    x = u - 35
-                    m = 32 * (u - 12) // 255 - 23
-                    k = m + (p - m) % (u - 4)
+                return (
+                    p if p <= x else \
+                    k if k <= x else \
+                    m
+                )
 
-                    return (
-                        p if p <= x else \
-                        k if k <= x else \
-                        m
-                    )
-
-                full_payload_size, _ = cell_varint_reader()
-                rowid, _ = cell_varint_reader()
-
-                initial_payload_size = get_initial_payload_size(full_payload_size)
-
+            def process_initial_payload(initial_payload_size,
+                                        full_payload_size, full_payload_processor,
+                                        cell_num_reader, cell_varint_reader):
                 if initial_payload_size == full_payload_size:
                     yield from full_payload_processor(cell_num_reader, cell_varint_reader)
 
@@ -211,7 +207,7 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                         full_payload_processor, payload_chunks, payload_remainder
                     ), next_overflow_page)
 
-            def read_table_row(cell_num_reader, cell_varint_reader):
+            def read_table_row(rowid, cell_num_reader, cell_varint_reader):
 
                 def serial_types(header_remaining, cell_varint_reader):
                     while header_remaining:
@@ -222,7 +218,7 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                 header_remaining, header_varint_size = cell_varint_reader()
                 header_remaining -= header_varint_size
 
-                return row_constructor(*tuple(
+                return row_constructor(rowid, *tuple(
                     parser(cell_num_reader(length))
                     for serial_type in tuple(serial_types(header_remaining, cell_varint_reader))
                     for (length, parser) in (
@@ -248,11 +244,11 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                     cur.execute(master_row.sql)
                     cur.execute("PRAGMA table_info('" + master_row.name.replace("'","''") + "');")
                     columns = cur.fetchall()
-                    row_constructor = namedtuple('Row', (column[1] for column in columns))
+                    row_constructor = namedtuple('Row', ('rowid',) + tuple(column[1] for column in columns))
                     return tuple(column_constructor(*column) for column in columns), row_constructor
 
-                def process_master_leaf_row(cell_num_reader, cell_varint_reader):
-                    master_row = read_table_row(cell_num_reader, cell_varint_reader)
+                def process_master_leaf_row(rowid, cell_num_reader, cell_varint_reader):
+                    master_row = read_table_row(rowid, cell_num_reader, cell_varint_reader)
                     yield from (
                         process_if_buffered_or_remember(partial(process_table_page, master_row.name, *table_info_and_row_constructor(cur, master_row)), master_row.rootpage) if master_row.type == 'table' else \
                         process_if_buffered_or_remember(process_index_page, master_row.rootpage) if master_row.type == 'index' else \
@@ -268,15 +264,18 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
 
                     for pointer, in pointers:
                         cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
+                        full_payload_size, _ = cell_varint_reader()
+                        rowid, _ = cell_varint_reader()
+                        initial_payload_size = get_table_initial_payload_size(full_payload_size)
                         yield from process_initial_payload(
-                            process_master_leaf_row,
+                            initial_payload_size, full_payload_size, partial(process_master_leaf_row, rowid),
                             cell_num_reader, cell_varint_reader,
                         )
 
             def process_table_leaf_non_master():
 
-                def process_non_master_leaf_row(cell_num_reader, cell_varint_reader):
-                    yield table_name, table_info, read_table_row(cell_num_reader, cell_varint_reader)
+                def process_non_master_leaf_row(rowid, cell_num_reader, cell_varint_reader):
+                    yield table_name, table_info, read_table_row(rowid, cell_num_reader, cell_varint_reader)
 
                 _, num_cells, _, _ = table_leaf_header.unpack(page_reader(7))
 
@@ -284,8 +283,12 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
 
                 for pointer, in pointers:
                     cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
+                    full_payload_size, _ = cell_varint_reader()
+                    rowid, _ = cell_varint_reader()
+                    initial_payload_size = get_table_initial_payload_size(full_payload_size)
+
                     yield from process_initial_payload(
-                        process_non_master_leaf_row,
+                        initial_payload_size, full_payload_size, partial(process_non_master_leaf_row, rowid),
                         cell_num_reader, cell_varint_reader,
                     )
 

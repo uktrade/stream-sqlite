@@ -38,7 +38,7 @@ class TestStreamSqlite(unittest.TestCase):
                         column_constructor(cid=0, name='my_text_col_a', type='text', notnull=0, dflt_value=None, pk=0),
                         column_constructor(cid=1, name='my_text_col_b', type='text', notnull=0, dflt_value=None, pk=0),
                     ),
-                    [('some-text-a', 'some-text-b')],
+                    [(1, 'some-text-a', 'some-text-b')],
                 )], all_chunks)
 
     def test_overflow_master(self):
@@ -59,7 +59,7 @@ class TestStreamSqlite(unittest.TestCase):
                         column_constructor(cid=0, name=column_name, type='text', notnull=0, dflt_value=None, pk=0),
                     ),
                     [
-                        ('a',)
+                        (1, 'a',)
                     ],
                 )], all_chunks)
 
@@ -81,7 +81,7 @@ class TestStreamSqlite(unittest.TestCase):
                             column_constructor(cid=0, name='my_text_col_a', type='text', notnull=0, dflt_value=None, pk=0),
                         ),
                         [
-                            ('-' * i,)
+                            (1, '-' * i)
                         ],
                     )], all_chunks)
 
@@ -103,24 +103,24 @@ class TestStreamSqlite(unittest.TestCase):
                         column_constructor(cid=0, name='my_text_col_a', type='integer', notnull=0, dflt_value=None, pk=0),
                     ),
                     [
-                        (0,),
-                        (1,),
-                        (2,),
-                        (65536,),
-                        (16777216,),
-                        (4294967296,),
-                        (1099511627776,),
-                        (281474976710656,),
-                        (72057594037927936,),
-                        (0,),
-                        (-1,),
-                        (-2,),
-                        (-65536,),
-                        (-16777216,),
-                        (-4294967296,),
-                        (-1099511627776,),
-                        (-281474976710656,),
-                        (-72057594037927936,)]
+                        (1, 0),
+                        (2, 1),
+                        (3, 2),
+                        (4, 65536),
+                        (5, 16777216),
+                        (6, 4294967296),
+                        (7, 1099511627776),
+                        (8, 281474976710656),
+                        (9, 72057594037927936),
+                        (10, 0),
+                        (11, -1),
+                        (12, -2),
+                        (13, -65536),
+                        (14, -16777216),
+                        (15, -4294967296),
+                        (16, -1099511627776),
+                        (17, -281474976710656),
+                        (18, -72057594037927936)]
                 )], all_chunks)
 
     def test_floats(self):
@@ -140,8 +140,8 @@ class TestStreamSqlite(unittest.TestCase):
                         column_constructor(cid=0, name='my_col_a', type='real', notnull=0, dflt_value=None, pk=0),
                     ),
                     [
-                        (0.5123,),
-                        (-0.1,),
+                        (1, 0.5123),
+                        (2, -0.1),
                     ]
                 )], all_chunks)
 
@@ -165,7 +165,7 @@ class TestStreamSqlite(unittest.TestCase):
                         column_constructor(cid=0, name='my_text_col_a', type='text', notnull=0, dflt_value=None, pk=0),
                         column_constructor(cid=1, name='my_text_col_b', type='text', notnull=0, dflt_value=None, pk=0),
                     ),
-                    [('some-text-a', 'some-text-b')],
+                    [(1, 'some-text-a', 'some-text-b')],
                 ) for i in range(1, 101)], all_chunks)
 
     def test_large_table(self):
@@ -182,7 +182,7 @@ class TestStreamSqlite(unittest.TestCase):
                 all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=0))
 
                 self.assertEqual(
-                    [('some-text-a', 'some-text-b')] * 1000,
+                    [(i, 'some-text-a', 'some-text-b') for i in range (1, 1001)],
                     all_chunks[0][2],
                 )
 
@@ -206,7 +206,7 @@ class TestStreamSqlite(unittest.TestCase):
                     (
                         column_constructor(cid=0, name='my_col_a', type='integer', notnull=0, dflt_value=None, pk=0),
                     ),
-                    [(i,) for i in range(0, 1024)],
+                    [(i+1, i) for i in range(0, 1024)],
                 )], all_chunks)
 
     def test_with_pointermap_pages(self):
@@ -229,7 +229,7 @@ class TestStreamSqlite(unittest.TestCase):
                     (
                         column_constructor(cid=0, name='my_col_a', type='integer', notnull=0, dflt_value=None, pk=0),
                     ),
-                    [(i,) for i in range(0, 20000)],
+                    [(i+1, i) for i in range(0, 20000)],
                 )], all_chunks)
 
     def test_freelist(self):
