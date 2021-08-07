@@ -15,6 +15,7 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
     unsigned_long = Struct('>L')
     double = Struct('>d')
     table_leaf_header = Struct('>HHHB')
+    index_leaf_header = Struct('>HHHB')
     table_interior_header = Struct('>HHHBL')
     index_interior_header = Struct('>HHHBL')
     freelist_trunk_header = Struct('>LL')
@@ -156,6 +157,43 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
             nonlocal num_bytes_buffered
             num_bytes_buffered -= num_bytes
 
+        def process_initial_payload(initial_payload_size,
+                                    full_payload_size, full_payload_processor,
+                                    cell_num_reader, cell_varint_reader):
+            if initial_payload_size == full_payload_size:
+                yield from full_payload_processor(cell_num_reader, cell_varint_reader)
+
+            else:
+                initial_payload = cell_num_reader(initial_payload_size)
+                overflow_page, = unsigned_long.unpack(cell_num_reader(4))
+                payload_chunks = deque()
+                note_increase_buffered(len(initial_payload))
+                payload_chunks.append(initial_payload)
+                payload_remainder = full_payload_size - initial_payload_size
+
+                yield from process_if_buffered_or_remember(partial(
+                    process_overflow_page,
+                    full_payload_processor, payload_chunks, payload_remainder
+                ), overflow_page)
+
+        def process_overflow_page(full_payload_processor, payload_chunks, payload_remainder, page_bytes, page_reader):
+            next_overflow_page, = unsigned_long.unpack(page_reader(4))
+            num_this_page = min(payload_remainder, len(page_bytes) - 4)
+            payload_remainder -= num_this_page
+            note_increase_buffered(num_this_page)
+            payload_chunks.append(page_reader(num_this_page))
+
+            if not next_overflow_page:
+                payload = b''.join(payload_chunks)
+                note_decrease_buffered(len(payload))
+                yield from full_payload_processor(*get_chunk_readers(payload))
+
+            else:
+                yield from process_if_buffered_or_remember(partial(
+                    process_overflow_page,
+                    full_payload_processor, payload_chunks, payload_remainder
+                ), next_overflow_page)
+
         def process_table_page(table_name, table_info, row_constructor, page_bytes, page_reader):
 
             def get_table_initial_payload_size(p):
@@ -169,43 +207,6 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                     k if k <= x else \
                     m
                 )
-
-            def process_initial_payload(initial_payload_size,
-                                        full_payload_size, full_payload_processor,
-                                        cell_num_reader, cell_varint_reader):
-                if initial_payload_size == full_payload_size:
-                    yield from full_payload_processor(cell_num_reader, cell_varint_reader)
-
-                else:
-                    initial_payload = cell_num_reader(initial_payload_size)
-                    overflow_page, = unsigned_long.unpack(cell_num_reader(4))
-                    payload_chunks = deque()
-                    note_increase_buffered(len(initial_payload))
-                    payload_chunks.append(initial_payload)
-                    payload_remainder = full_payload_size - initial_payload_size
-
-                    yield from process_if_buffered_or_remember(partial(
-                        process_overflow_page,
-                        full_payload_processor, payload_chunks, payload_remainder
-                    ), overflow_page)
-
-            def process_overflow_page(full_payload_processor, payload_chunks, payload_remainder, page_bytes, page_reader):
-                next_overflow_page, = unsigned_long.unpack(page_reader(4))
-                num_this_page = min(payload_remainder, len(page_bytes) - 4)
-                payload_remainder -= num_this_page
-                note_increase_buffered(num_this_page)
-                payload_chunks.append(page_reader(num_this_page))
-
-                if not next_overflow_page:
-                    payload = b''.join(payload_chunks)
-                    note_decrease_buffered(len(payload))
-                    yield from full_payload_processor(*get_chunk_readers(payload))
-
-                else:
-                    yield from process_if_buffered_or_remember(partial(
-                        process_overflow_page,
-                        full_payload_processor, payload_chunks, payload_remainder
-                    ), next_overflow_page)
 
             def read_table_row(rowid, cell_num_reader, cell_varint_reader):
 
@@ -316,10 +317,42 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
 
         def process_index_page(page_bytes, page_reader):
 
+            def get_index_initial_payload_size(p):
+                u = len(page_bytes)
+                x = (u - 12 ) * 64 // 255 -23
+                m = 32 * (u - 12) // 255 - 23
+                k = m + (p - m) % (u - 4)
+
+                return (
+                    p if p <= x else \
+                    k if k <= x else \
+                    m
+                )
+
             def process_index_leaf():
-                yield from ()
+
+                def process_index_leaf_row(cell_num_reader, cell_varint_reader):
+                    yield from ()
+
+                _, num_cells, _, _ = index_leaf_header.unpack(page_reader(7))
+
+                pointers = unsigned_short.iter_unpack(page_reader(num_cells * 2))
+
+                for pointer, in pointers:
+                    cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
+                    full_payload_size, _ = cell_varint_reader()
+                    initial_payload_size = get_index_initial_payload_size(full_payload_size)
+
+                    yield from process_initial_payload(
+                        initial_payload_size, full_payload_size, process_index_leaf_row,
+                        cell_num_reader, cell_varint_reader,
+                    )
 
             def process_index_interior():
+
+                def process_index_interior_row(cell_num_reader, cell_varint_reader):
+                    yield from ()
+
                 _, num_cells, _, _, right_most_pointer = \
                     index_interior_header.unpack(page_reader(11))
 
@@ -329,6 +362,13 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                     cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
                     page_num, =  unsigned_long.unpack(cell_num_reader(4))
                     yield from process_if_buffered_or_remember(process_index_page, page_num)
+
+                    full_payload_size, _ = cell_varint_reader()
+                    initial_payload_size = get_index_initial_payload_size(full_payload_size)
+                    yield from process_initial_payload(
+                        initial_payload_size, full_payload_size, process_index_interior_row,
+                        cell_num_reader, cell_varint_reader,
+                    )
 
                 yield from process_if_buffered_or_remember(process_index_page, right_most_pointer)
 
