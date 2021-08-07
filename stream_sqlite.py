@@ -243,9 +243,13 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                 def table_info_and_row_constructor(cur, master_row):
                     cur.execute(master_row.sql)
                     cur.execute("PRAGMA table_info('" + master_row.name.replace("'","''") + "');")
-                    columns = cur.fetchall()
-                    row_constructor = namedtuple('Row', ('rowid',) + tuple(column[1] for column in columns))
-                    return tuple(column_constructor(*column) for column in columns), row_constructor
+                    columns = tuple(column_constructor(*column) for column in cur.fetchall())
+                    integer_primary_key_indexes = tuple(i for i, column in enumerate(columns) if column.pk and column.type.lower() == 'integer')
+                    rowid_alias_index = integer_primary_key_indexes[0] if len(integer_primary_key_indexes) == 1 else None
+                    row_namedtuple = namedtuple('Row', tuple(column.name for column in columns))
+                    row_constructor = lambda rowid, *values: row_namedtuple(*tuple((rowid if i == rowid_alias_index else value) for i, value in enumerate(values)))
+
+                    return columns, row_constructor
 
                 def process_master_leaf_row(rowid, cell_num_reader, cell_varint_reader):
                     master_row = read_table_row(rowid, cell_num_reader, cell_varint_reader)
