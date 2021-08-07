@@ -249,11 +249,10 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
 
                 def process_master_leaf_row(rowid, cell_num_reader, cell_varint_reader):
                     master_row = read_table_row(rowid, cell_num_reader, cell_varint_reader)
-                    yield from (
+                    yield from \
                         process_if_buffered_or_remember(partial(process_table_page, master_row.name, *table_info_and_row_constructor(cur, master_row)), master_row.rootpage) if master_row.type == 'table' else \
                         process_if_buffered_or_remember(process_index_page, master_row.rootpage) if master_row.type == 'index' else \
                         ()
-                    )
 
                 _, num_cells, _, _ = table_leaf_header.unpack(page_reader(7))
 
@@ -308,11 +307,10 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                     partial(process_table_page, table_name, table_info, row_constructor), right_most_pointer)
 
             page_type = page_reader(1)
-            yield from (
+            yield from \
                 process_table_leaf_master() if page_type == LEAF_TABLE and table_name == 'sqlite_schema' else \
                 process_table_leaf_non_master() if page_type == LEAF_TABLE else \
                 process_table_interior()
-            )
 
         def process_index_page(page_bytes, page_reader):
 
@@ -371,10 +369,9 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                 yield from process_if_buffered_or_remember(process_index_page, right_most_pointer)
 
             page_type = page_reader(1)
-            yield from (
+            yield from \
                 process_index_leaf() if page_type == LEAF_INDEX else \
                 process_index_interior()
-            )
 
         def process_freelist_trunk_page(page_bytes, page_reader):
             next_trunk, num_leaves = freelist_trunk_header.unpack(page_reader(8))
