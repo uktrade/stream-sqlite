@@ -241,8 +241,11 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
             def process_table_leaf_master():
 
                 def table_info_and_row_constructor(cur, master_row):
-                    cur.execute(master_row.sql)
-                    cur.execute("PRAGMA table_info('" + master_row.name.replace("'","''") + "');")
+                    name, sql = \
+                        ('_' + master_row.name, 'CREATE TABLE _' + master_row.name + master_row.sql[13 + len(master_row.name):]) if master_row.name.startswith('sqlite_') else \
+                        (master_row.name, master_row.sql)
+                    cur.execute(sql)
+                    cur.execute("PRAGMA table_info('" + name.replace("'","''") + "');")
                     columns = tuple(column_constructor(*column) for column in cur.fetchall())
                     integer_primary_key_indexes = tuple(i for i, column in enumerate(columns) if column.pk and column.type.lower() == 'integer')
                     rowid_alias_index = integer_primary_key_indexes[0] if len(integer_primary_key_indexes) == 1 else None
@@ -423,7 +426,8 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
     page_size, num_pages_expected, first_freelist_trunk_page, incremental_vacuum = parse_header(get_bytes(100))
 
     page_nums_pages_readers = yield_page_nums_pages_readers(get_bytes, page_size, num_pages_expected, incremental_vacuum)
-    table_rows = yield_table_rows(page_nums_pages_readers, first_freelist_trunk_page)
+    table_rows_including_internal = yield_table_rows(page_nums_pages_readers, first_freelist_trunk_page)
+    table_rows = ((table_name, table_info, row) for table_name, table_info, row in table_rows_including_internal if not table_name.startswith('sqlite_'))
     grouped_by_table = groupby(table_rows, key=lambda name_info_row: (name_info_row[0], name_info_row[1]))
 
     for (name, info), single_table_rows in grouped_by_table:

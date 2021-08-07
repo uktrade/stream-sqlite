@@ -285,6 +285,33 @@ class TestStreamSqlite(unittest.TestCase):
                     ],
                 )], all_chunks)
 
+    def test_analyze(self):
+        for page_size, chunk_size in itertools.product(
+            [65536],
+            [131072],
+        ):
+            with self.subTest(page_size=page_size, chunk_size=chunk_size):
+                sqls = (
+                    ["CREATE TABLE my_table_1 (my_col_a integer primary key);"] +
+                    [
+                        "INSERT INTO my_table_1 VALUES ({});".format(i)
+                        for i in range(0, 100)
+                    ] + [
+                        "ANALYZE;"
+                    ]
+                )
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=1048576))
+                self.assertEqual([(
+                    "my_table_1",
+                    (
+                        column_constructor(cid=0, name='my_col_a', type='integer', notnull=0, dflt_value=None, pk=1),
+                    ),
+                    [
+                        (i,)
+                        for i in range(0, 100)
+                    ],
+                )], all_chunks)
+
     def test_with_pointermap_pages(self):
         for page_size, chunk_size in itertools.product(
             [512, 1024, 4096, 8192],
