@@ -426,6 +426,15 @@ class TestStreamSqlite(unittest.TestCase):
         with self.assertRaises(ValueError):
             next(tables_list(stream_sqlite([db_bytes], max_buffer_size=20971520)))
 
+    def test_expected_page_unprocessed(self):
+        sqls = [
+            "CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);",
+        ]
+        db_bytes = bytearray(b''.join(db(sqls, page_size=1024, chunk_size=131072)))
+        db_bytes[32:36] = b'\x99\x00\x00\x00'
+        with self.assertRaises(ValueError):
+            next(tables_list(stream_sqlite([db_bytes], max_buffer_size=20971520)))
+
     def test_lock_byte_page(self):
         def get_file_bytes():
             with open('fixtures/large.sqlite.gz', 'rb') as f:
