@@ -414,14 +414,11 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
             else:
                 yield from process_page(page_bytes, page_reader)
 
-        if len(page_buffer) != 0:
-            raise ValueError('Unidentified pages in buffer')
+        if num_bytes_buffered != 0:
+            raise ValueError('Bytes remain in cache')
 
         if len(page_processors) != 0:
             raise ValueError("Expected a page that wasn't processed")
-
-        if num_bytes_buffered != 0:
-            raise ValueError('Bytes remain in cache')
 
     get_bytes = get_byte_reader(sqlite_chunks)
     page_size, num_pages_expected, first_freelist_trunk_page, incremental_vacuum = parse_header(get_bytes(100))
