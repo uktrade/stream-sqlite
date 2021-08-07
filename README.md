@@ -2,6 +2,8 @@
 
 Python function to extract all the rows from a SQLite database file concurrently with iterating over its bytes, without needing random access to the file.
 
+Note that the [SQLite file format](https://www.sqlite.org/fileformat.html) is not designed to be streamed; the data is arranged in _pages_ of a fixed number of bytes, and the information to identify a page often comes _after_ the page in the stream (sometimes a great deal after). Therefore, pages are buffered in memory until they can be identified.
+
 
 ## Installation
 
@@ -33,10 +35,8 @@ for table_name, table_info, rows in stream_sqlite(sqlite_bytes(), max_buffer_siz
 ```
 
 
-## Limitations and recommendations
+## Recommendations
 
-The [SQLite file format](https://www.sqlite.org/fileformat.html) is not designed to be streamed: the data is arranged in _pages_ of a fixed number of bytes, and the information to identify a page often comes _after_ the page in the stream. Therefore, pages are buffered in memory by the `stream_sqlite` function until they can be identified.
-
-However, if you have control over the SQLite file, `VACUUM;` should be run on it before streaming. In addition to minimising the size of the file, `VACUUM;` arranges the pages in a way that often reduces the buffering required when streaming. This is especially true if it was the target of intermingled `INSERT`s and/or `DELETE`s over multiple tables.
+If you have control over the SQLite file, `VACUUM;` should be run on it before streaming. In addition to minimising the size of the file, `VACUUM;` arranges the pages in a way that often reduces the buffering required when streaming. This is especially true if it was the target of intermingled `INSERT`s and/or `DELETE`s over multiple tables.
 
 Also, indexes are not used for extracting the rows while streaming. If streaming is the only use case of the SQLite file, and you have control over it, indexes should be removed, and `VACUUM;` then run.
