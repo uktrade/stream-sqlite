@@ -202,11 +202,10 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                 m = 32 * (u - 12) // 255 - 23
                 k = m + (p - m) % (u - 4)
 
-                return (
+                return \
                     p if p <= x else \
                     k if k <= x else \
                     m
-                )
 
             def read_table_row(rowid, cell_num_reader, cell_varint_reader):
 
@@ -323,11 +322,10 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                 m = 32 * (u - 12) // 255 - 23
                 k = m + (p - m) % (u - 4)
 
-                return (
+                return \
                     p if p <= x else \
                     k if k <= x else \
                     m
-                )
 
             def process_index_leaf():
 
