@@ -47,7 +47,14 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
         def _get_num(num):
             return b''.join(chunk for chunk in _yield_num(num))
 
-        return _get_num
+        def _finish():
+            try:
+                while True:
+                    next(it)
+            except StopIteration:
+                pass
+
+        return _get_num, _finish
 
     def get_chunk_readers(chunk, p=0):
         # Set of functions to read a chunk of bytes, which it itself made of
@@ -422,7 +429,7 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
         if len(page_processors) != 0:
             raise ValueError("Expected a page that wasn't processed")
 
-    get_bytes = get_byte_reader(sqlite_chunks)
+    get_bytes, finish = get_byte_reader(sqlite_chunks)
     page_size, num_pages_expected, first_freelist_trunk_page, incremental_vacuum = parse_header(get_bytes(100))
 
     page_nums_pages_readers = yield_page_nums_pages_readers(get_bytes, page_size, num_pages_expected, incremental_vacuum)
@@ -432,3 +439,5 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
 
     for (name, info), single_table_rows in grouped_by_table:
         yield name, info, (row for (_, _, row) in single_table_rows)
+
+    finish()
