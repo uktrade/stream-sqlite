@@ -25,12 +25,8 @@ def sqlite_bytes():
 
 # If there is a single table in the file, there will be exactly one iteration of the outer loop.
 # If there are multiple tables, each can appear multiple times.
-for table_name, table_info, rows in stream_sqlite(sqlite_bytes(), max_buffer_size=1_048_576):
-    # Output of PRAGMA table_info as a namedtuple
-    print(table_info)
-
+for table_name, pragma_table_info, rows in stream_sqlite(sqlite_bytes(), max_buffer_size=1_048_576):
     for row in rows:
-        # Row as a namedtuple
         print(row)
 ```
 
