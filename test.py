@@ -209,7 +209,7 @@ class TestStreamSqlite(unittest.TestCase):
                     [(i+1, i) for i in range(0, 1024)],
                 )], all_chunks)
 
-    def test_index_overflow(self):
+    def test_index_overflow_few(self):
         for page_size, chunk_size in itertools.product(
             [512, 1024, 4096, 8192, 16384, 32768, 65536],
             [1, 2, 3, 5, 7, 32, 131072],
@@ -222,7 +222,7 @@ class TestStreamSqlite(unittest.TestCase):
                     ] +
                     ["CREATE INDEX my_index ON my_table_1(my_col_a);"]
                 )
-                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=20971520))
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=1048576))
                 self.assertEqual([(
                     "my_table_1",
                     (
@@ -231,6 +231,32 @@ class TestStreamSqlite(unittest.TestCase):
                     [
                         (1, 'a' * 20000),
                         (2, 'b' * 20000),
+                    ],
+                )], all_chunks)
+
+    def test_index_interior_overflow_many(self):
+        for page_size, chunk_size in itertools.product(
+            [512, 1024, 4096, 8192, 16384, 32768, 65536],
+            [1, 2, 3, 5, 7, 32, 131072],
+        ):
+            with self.subTest(page_size=page_size, chunk_size=chunk_size):
+                sqls = (
+                    ["CREATE TABLE my_table_1 (my_col_a text);"] +
+                    [
+                        "INSERT INTO my_table_1 VALUES ('{}');".format(str(i) * 2000)
+                        for i in range(0, 100)
+                    ] +
+                    ["CREATE INDEX my_index ON my_table_1(my_col_a);"]
+                )
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=1048576))
+                self.assertEqual([(
+                    "my_table_1",
+                    (
+                        column_constructor(cid=0, name='my_col_a', type='text', notnull=0, dflt_value=None, pk=0),
+                    ),
+                    [
+                        (i+1, str(i) * 2000)
+                        for i in range(0, 100)
                     ],
                 )], all_chunks)
 
