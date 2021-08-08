@@ -14,10 +14,8 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
     unsigned_short = Struct('>H')
     unsigned_long = Struct('>L')
     double = Struct('>d')
-    table_leaf_header = Struct('>HHHB')
-    index_leaf_header = Struct('>HHHB')
-    table_interior_header = Struct('>HHHBL')
-    index_interior_header = Struct('>HHHBL')
+    leaf_header = Struct('>HHHB')
+    interior_header = Struct('>HHHBL')
     freelist_trunk_header = Struct('>LL')
 
     master_row_constructor = namedtuple('MasterRow', ('rowid', 'type', 'name', 'tbl_name', 'rootpage', 'sql'))
@@ -272,7 +270,7 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                         process_if_buffered_or_remember(process_index_page, master_row.rootpage) if master_row.type == 'index' else \
                         ()
 
-                _, num_cells, _, _ = table_leaf_header.unpack(page_reader(7))
+                _, num_cells, _, _ = leaf_header.unpack(page_reader(7))
 
                 with connect(':memory:') as con:
                     cur = con.cursor()
@@ -294,7 +292,7 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                 def process_non_master_leaf_row(rowid, cell_num_reader, cell_varint_reader):
                     yield table_name, table_info, read_table_row(rowid, cell_num_reader, cell_varint_reader)
 
-                _, num_cells, _, _ = table_leaf_header.unpack(page_reader(7))
+                _, num_cells, _, _ = leaf_header.unpack(page_reader(7))
 
                 pointers = unsigned_short.iter_unpack(page_reader(num_cells * 2))
 
@@ -311,7 +309,7 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
 
             def process_table_interior():
                 _, num_cells, _, _, right_most_pointer = \
-                    table_interior_header.unpack(page_reader(11))
+                    interior_header.unpack(page_reader(11))
 
                 pointers = unsigned_short.iter_unpack(page_reader(num_cells * 2))
 
@@ -348,7 +346,7 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                 def process_index_leaf_row(cell_num_reader, cell_varint_reader):
                     yield from ()
 
-                _, num_cells, _, _ = index_leaf_header.unpack(page_reader(7))
+                _, num_cells, _, _ = leaf_header.unpack(page_reader(7))
 
                 pointers = unsigned_short.iter_unpack(page_reader(num_cells * 2))
 
@@ -368,7 +366,7 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                     yield from ()
 
                 _, num_cells, _, _, right_most_pointer = \
-                    index_interior_header.unpack(page_reader(11))
+                    interior_header.unpack(page_reader(11))
 
                 pointers = unsigned_short.iter_unpack(page_reader(num_cells * 2))
 
