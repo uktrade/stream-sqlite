@@ -353,6 +353,8 @@ class TestStreamSqlite(unittest.TestCase):
                 )], all_chunks)
 
     def test_with_pointermap_pages(self):
+        string = '-' * 100000
+
         for page_size, chunk_size in itertools.product(
             [512, 1024, 4096, 8192],
             [512],
@@ -360,19 +362,19 @@ class TestStreamSqlite(unittest.TestCase):
             with self.subTest(page_size=page_size, chunk_size=chunk_size):
                 sqls = (
                     ["PRAGMA auto_vacuum = FULL;"] +
-                    ["CREATE TABLE my_table_1 (my_col_a integer);"] +
+                    ["CREATE TABLE my_table_1 (my_col_a text);"] +
                     [
-                        "INSERT INTO my_table_1 VALUES ({});".format(i)
-                        for i in range(0, 20000)
+                        "INSERT INTO my_table_1 VALUES ('{}');".format(string)
+                        for i in range(0, 200)
                     ]
                 )
                 all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=20971520))
                 self.assertEqual([(
                     "my_table_1",
                     (
-                        column_constructor(cid=0, name='my_col_a', type='integer', notnull=0, dflt_value=None, pk=0),
+                        column_constructor(cid=0, name='my_col_a', type='text', notnull=0, dflt_value=None, pk=0),
                     ),
-                    [(i,) for i in range(0, 20000)],
+                    [(string,) for i in range(0, 200)],
                 )], all_chunks)
 
     def test_iterable_finishes(self):
