@@ -1,7 +1,6 @@
 from collections import deque, namedtuple
 from functools import partial
 from itertools import groupby
-from math import ceil
 from struct import Struct
 from sqlite3 import connect
 
@@ -117,7 +116,7 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
         page_reader(100)
 
         lock_byte_page = 1073741824 // page_size + 1
-        ptrmap_j = int(ceil(page_size/5))
+        ptrmap_j = page_size // 5 + 1
 
         yield 1, page_bytes, page_reader
 
