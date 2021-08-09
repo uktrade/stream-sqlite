@@ -241,8 +241,8 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                         (8, lambda raw: double.unpack(raw)[0]) if serial_type == 7 else \
                         (0, lambda _: 0) if serial_type == 8 else \
                         (0, lambda _: 1) if serial_type == 9 else \
-                        (int((serial_type - 12)/2), lambda raw: raw) if serial_type % 2 == 0 else \
-                        (int((serial_type - 13)/2), lambda raw: raw.decode()) if serial_type % 2 == 1 else \
+                        (((serial_type - 12)//2), lambda raw: raw) if serial_type % 2 == 0 else \
+                        (((serial_type - 13)//2), lambda raw: raw.decode()) if serial_type % 2 == 1 else \
                         (None, None),
                     )
                 ))
