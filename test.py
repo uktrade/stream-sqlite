@@ -19,7 +19,7 @@ class TestStreamSqlite(unittest.TestCase):
             [1, 2, 3, 5, 7, 32, 131072],
         ):
             with self.subTest(page_size, chunk_size=chunk_size):
-                all_chunks = tables_list(stream_sqlite(db(['VACUUM;'], page_size, chunk_size), max_buffer_size=0))
+                all_chunks = tables_list(stream_sqlite(db([('VACUUM;', ())], page_size, chunk_size), max_buffer_size=0))
                 self.assertEqual([], all_chunks)
 
     def test_small_table(self):
@@ -29,9 +29,9 @@ class TestStreamSqlite(unittest.TestCase):
         ):
             with self.subTest(page_size=page_size, chunk_size=chunk_size):
                 sqls = [
-                    "CREATE TABLE \"my_table_'1\" (my_text_col_a text, my_text_col_b text);",
-                    "CREATE TABLE \"my_table_'2\" (my_text_col_a text, my_text_col_b text);",
-                    "INSERT INTO \"my_table_'1\" VALUES ('some-text-a', 'some-text-b')",
+                    ("CREATE TABLE \"my_table_'1\" (my_text_col_a text, my_text_col_b text);", ()),
+                    ("CREATE TABLE \"my_table_'2\" (my_text_col_a text, my_text_col_b text);", ()),
+                    ("INSERT INTO \"my_table_'1\" VALUES ('some-text-a', 'some-text-b')", ()),
                 ]
                 all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=0))
                 self.assertEqual([(
@@ -51,8 +51,8 @@ class TestStreamSqlite(unittest.TestCase):
             column_name = "my_text_col_" + ('a' * 10000)
             with self.subTest(page_size=page_size, chunk_size=chunk_size):
                 sqls = [
-                    "CREATE TABLE my_table_1 ({} text);".format(column_name),
-                    "INSERT INTO my_table_1 VALUES ('a')".format(column_name),
+                    ("CREATE TABLE my_table_1 ({} text);".format(column_name), ()),
+                    ("INSERT INTO my_table_1 VALUES ('a')".format(column_name), ()),
                 ]
                 all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=20971520))
                 self.assertEqual([(
@@ -73,8 +73,8 @@ class TestStreamSqlite(unittest.TestCase):
             with self.subTest(page_size=page_size, chunk_size=chunk_size):
                 for i  in range(1, 10001):
                     sqls = [
-                        "CREATE TABLE my_table_1 (my_text_col_a text);",
-                        "INSERT INTO my_table_1 VALUES ('" + ('-' * i) + "')"
+                        ("CREATE TABLE my_table_1 (my_text_col_a text);", ()),
+                        ("INSERT INTO my_table_1 VALUES ('" + ('-' * i) + "')", ()),
                     ]
                     all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=20971520))
                     self.assertEqual([(
@@ -94,9 +94,9 @@ class TestStreamSqlite(unittest.TestCase):
         ):
             with self.subTest(page_size=page_size, chunk_size=chunk_size):
                 sqls = [
-                    "CREATE TABLE my_table_1 (my_text_col_a integer);",
-                    "INSERT INTO my_table_1 VALUES (0),(1),(2),(65536),(16777216),(4294967296),(1099511627776),(281474976710656),(72057594037927936)",
-                    "INSERT INTO my_table_1 VALUES (0),(-1),(-2),(-65536),(-16777216),(-4294967296),(-1099511627776),(-281474976710656),(-72057594037927936)",
+                    ("CREATE TABLE my_table_1 (my_text_col_a integer);", ()),
+                    ("INSERT INTO my_table_1 VALUES (0),(1),(2),(65536),(16777216),(4294967296),(1099511627776),(281474976710656),(72057594037927936)", ()),
+                    ("INSERT INTO my_table_1 VALUES (0),(-1),(-2),(-65536),(-16777216),(-4294967296),(-1099511627776),(-281474976710656),(-72057594037927936)", ()),
                 ]
                 all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=0))
                 self.assertEqual([(
@@ -132,9 +132,9 @@ class TestStreamSqlite(unittest.TestCase):
         ):
             with self.subTest(page_size=page_size, chunk_size=chunk_size):
                 sqls = [
-                    "CREATE TABLE my_table_1 (m integer primary key);",
-                    "INSERT INTO my_table_1 VALUES (0),(1),(2),(65536),(16777216),(4294967296),(1099511627776),(281474976710656),(72057594037927936)",
-                    "INSERT INTO my_table_1 VALUES (-1),(-2),(-65536),(-16777216),(-4294967296),(-1099511627776),(-281474976710656),(-72057594037927936)",
+                    ("CREATE TABLE my_table_1 (m integer primary key);", ()),
+                    ("INSERT INTO my_table_1 VALUES (0),(1),(2),(65536),(16777216),(4294967296),(1099511627776),(281474976710656),(72057594037927936)", ()),
+                    ("INSERT INTO my_table_1 VALUES (-1),(-2),(-65536),(-16777216),(-4294967296),(-1099511627776),(-281474976710656),(-72057594037927936)", ()),
                 ]
                 all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=0))
                 self.assertEqual([(
@@ -170,8 +170,8 @@ class TestStreamSqlite(unittest.TestCase):
         ):
             with self.subTest(page_size=page_size, chunk_size=chunk_size):
                 sqls = [
-                    "CREATE TABLE my_table_1 (my_col_a real);",
-                    "INSERT INTO my_table_1 VALUES (0.5123), (-0.1)",
+                    ("CREATE TABLE my_table_1 (my_col_a real);", ()),
+                    ("INSERT INTO my_table_1 VALUES (0.5123), (-0.1)", ()),
                 ]
                 all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=0))
                 self.assertEqual([(
@@ -185,6 +185,30 @@ class TestStreamSqlite(unittest.TestCase):
                     ]
                 )], all_chunks)
 
+    def test_blobs(self):
+        small_blob = b'Something'
+        big_blob = b'E' * 99999999  # Can't be much bigger on CircleCI
+        for page_size, chunk_size in itertools.product(
+            [512, 65536,],
+            [131072,],
+        ):
+            with self.subTest(page_size=page_size, chunk_size=chunk_size):
+                sqls = [
+                    ("CREATE TABLE my_table_1 (my_col_a blob);", ()),
+                    ("INSERT INTO my_table_1 VALUES (?), (?)", (b'Something', big_blob)),
+                ]
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=1048576000))
+                self.assertEqual([(
+                    'my_table_1',
+                    (
+                        column_constructor(cid=0, name='my_col_a', type='blob', notnull=0, dflt_value=None, pk=0),
+                    ),
+                    [
+                        (small_blob,),
+                        (big_blob,),
+                    ]
+                )], all_chunks)
+
     def test_many_small_tables(self):
         for page_size, chunk_size in itertools.product(
             [512, 1024, 4096, 8192, 16384, 32768, 65536],
@@ -193,8 +217,8 @@ class TestStreamSqlite(unittest.TestCase):
             with self.subTest(page_size=page_size, chunk_size=chunk_size):
                 sqls = flatten((
                     [
-                        "CREATE TABLE my_table_{} (my_text_col_a text, my_text_col_b text);".format(i),
-                        "INSERT INTO my_table_{} VALUES ('some-text-a', 'some-text-b');".format(i),
+                        ("CREATE TABLE my_table_{} (my_text_col_a text, my_text_col_b text);".format(i), ()),
+                        ("INSERT INTO my_table_{} VALUES ('some-text-a', 'some-text-b');".format(i), ()),
                     ]
                     for i in range(1, 101)
                 ))
@@ -215,9 +239,9 @@ class TestStreamSqlite(unittest.TestCase):
         ):
             with self.subTest(page_size=page_size, chunk_size=chunk_size):
                 sqls = [
-                    "CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);",
+                    ("CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);", ()),
                 ] + [
-                    "INSERT INTO my_table_1 VALUES ('some-text-a', 'some-text-b')",
+                    ("INSERT INTO my_table_1 VALUES ('some-text-a', 'some-text-b')", ()),
                 ] * 1000
                 all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=0))
 
@@ -233,12 +257,12 @@ class TestStreamSqlite(unittest.TestCase):
         ):
             with self.subTest(page_size=page_size, chunk_size=chunk_size):
                 sqls = (
-                    ["CREATE TABLE my_table_1 (my_col_a integer);"] +
+                    [("CREATE TABLE my_table_1 (my_col_a integer);", ())] +
                     [
-                        "INSERT INTO my_table_1 VALUES ({});".format(i)
+                        ("INSERT INTO my_table_1 VALUES ({});".format(i), ())
                         for i in range(0, 1024)
                     ] +
-                    ["CREATE INDEX my_index ON my_table_1(my_col_a);"]
+                    [("CREATE INDEX my_index ON my_table_1(my_col_a);", ())]
                 )
                 all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=0))
                 self.assertEqual([(
@@ -256,11 +280,11 @@ class TestStreamSqlite(unittest.TestCase):
         ):
             with self.subTest(page_size=page_size, chunk_size=chunk_size):
                 sqls = (
-                    ["CREATE TABLE my_table_1 (my_col_a text);"] +
+                    [("CREATE TABLE my_table_1 (my_col_a text);", ())] +
                     [
-                        "INSERT INTO my_table_1 VALUES ('{}'), ('{}');".format('a' * 20000, 'b' * 20000)
+                        ("INSERT INTO my_table_1 VALUES ('{}'), ('{}');".format('a' * 20000, 'b' * 20000), ()),
                     ] +
-                    ["CREATE INDEX my_index ON my_table_1(my_col_a);"]
+                    [("CREATE INDEX my_index ON my_table_1(my_col_a);", ())]
                 )
                 all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=1048576))
                 self.assertEqual([(
@@ -281,12 +305,12 @@ class TestStreamSqlite(unittest.TestCase):
         ):
             with self.subTest(page_size=page_size, chunk_size=chunk_size):
                 sqls = (
-                    ["CREATE TABLE my_table_1 (my_col_a text);"] +
+                    [("CREATE TABLE my_table_1 (my_col_a text);", ())] +
                     [
-                        "INSERT INTO my_table_1 VALUES ('{}');".format(str(i) * 2000)
+                       ("INSERT INTO my_table_1 VALUES ('{}');".format(str(i) * 2000), ())
                         for i in range(0, 100)
                     ] +
-                    ["CREATE INDEX my_index ON my_table_1(my_col_a);"]
+                    [("CREATE INDEX my_index ON my_table_1(my_col_a);", ())]
                 )
                 all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=1048576))
                 self.assertEqual([(
@@ -307,9 +331,9 @@ class TestStreamSqlite(unittest.TestCase):
         ):
             with self.subTest(page_size=page_size, chunk_size=chunk_size):
                 sqls = (
-                    ["CREATE TABLE my_table_1 (my_col_a integer primary key);"] +
+                    [("CREATE TABLE my_table_1 (my_col_a integer primary key);", ())] +
                     [
-                        "INSERT INTO my_table_1 VALUES ({});".format(i)
+                        ("INSERT INTO my_table_1 VALUES ({});".format(i), ())
                         for i in range(0, 100)
                     ]
                 )
@@ -332,12 +356,12 @@ class TestStreamSqlite(unittest.TestCase):
         ):
             with self.subTest(page_size=page_size, chunk_size=chunk_size):
                 sqls = (
-                    ["CREATE TABLE my_table_1 (my_col_a integer primary key);"] +
+                    [("CREATE TABLE my_table_1 (my_col_a integer primary key);", ())] +
                     [
-                        "INSERT INTO my_table_1 VALUES ({});".format(i)
+                        ("INSERT INTO my_table_1 VALUES ({});".format(i), ())
                         for i in range(0, 100)
                     ] + [
-                        "ANALYZE;"
+                        ("ANALYZE;", ()),
                     ]
                 )
                 all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=1048576))
@@ -361,10 +385,10 @@ class TestStreamSqlite(unittest.TestCase):
         ):
             with self.subTest(page_size=page_size, chunk_size=chunk_size):
                 sqls = (
-                    ["PRAGMA auto_vacuum = FULL;"] +
-                    ["CREATE TABLE my_table_1 (my_col_a text);"] +
+                    [("PRAGMA auto_vacuum = FULL;", ())] +
+                    [("CREATE TABLE my_table_1 (my_col_a text);", ())] +
                     [
-                        "INSERT INTO my_table_1 VALUES ('{}');".format(string)
+                        ("INSERT INTO my_table_1 VALUES ('{}');".format(string), ())
                         for i in range(0, 200)
                     ]
                 )
@@ -390,9 +414,9 @@ class TestStreamSqlite(unittest.TestCase):
                     finished = True
 
                 sqls = (
-                    ["CREATE TABLE my_table_1 (my_col_a integer primary key);"] +
+                    [("CREATE TABLE my_table_1 (my_col_a integer primary key);", ())] +
                     [
-                        "INSERT INTO my_table_1 VALUES ({});".format(i)
+                        ("INSERT INTO my_table_1 VALUES ({});".format(i), ())
                         for i in range(0, 100)
                     ]
                 )
@@ -411,11 +435,11 @@ class TestStreamSqlite(unittest.TestCase):
 
     def test_freelist(self):
         sqls = [
-            "CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);",
+            ("CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);", ()),
         ] + [
-            "INSERT INTO my_table_1 VALUES " + ','.join(["('some-text-a', 'some-text-b')"] * 500),
+            ("INSERT INTO my_table_1 VALUES " + ','.join(["('some-text-a', 'some-text-b')"] * 500), ()),
         ] * 1000 + [
-            "DELETE FROM my_table_1",
+            ("DELETE FROM my_table_1", ()),
         ]
         all_chunks = tables_list(stream_sqlite(db(sqls, page_size=1024, chunk_size=131072), max_buffer_size=20971520))
         self.assertEqual([], all_chunks)
@@ -433,9 +457,9 @@ class TestStreamSqlite(unittest.TestCase):
 
     def test_bad_encoding(self):
         sqls = [
-            "CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);",
+            ("CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);", ()),
         ] + [
-            "INSERT INTO my_table_1 VALUES ('some-text-a', 'some-text-b')",
+            ("INSERT INTO my_table_1 VALUES ('some-text-a', 'some-text-b')", ()),
         ]
         db_bytes = bytearray(b''.join(db(sqls, page_size=1024, chunk_size=131072)))
         db_bytes[56] = 99
@@ -444,9 +468,9 @@ class TestStreamSqlite(unittest.TestCase):
 
     def test_bad_usable_space(self):
         sqls = [
-            "CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);",
+            ("CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);", ()),
         ] + [
-            "INSERT INTO my_table_1 VALUES ('some-text-a', 'some-text-b')",
+            ("INSERT INTO my_table_1 VALUES ('some-text-a', 'some-text-b')", ()),
         ]
         db_bytes = bytearray(b''.join(db(sqls, page_size=1024, chunk_size=131072)))
         db_bytes[20] = 1
@@ -455,11 +479,11 @@ class TestStreamSqlite(unittest.TestCase):
 
     def test_unused_page(self):
         sqls = [
-            "CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);",
+            ("CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);", ()),
         ] + [
-            "INSERT INTO my_table_1 VALUES " + ','.join(["('some-text-a', 'some-text-b')"] * 500),
+            ("INSERT INTO my_table_1 VALUES " + ','.join(["('some-text-a', 'some-text-b')"] * 500), ()),
         ] * 1000 + [
-            "DELETE FROM my_table_1",
+            ("DELETE FROM my_table_1", ()),
         ]
         db_bytes = bytearray(b''.join(db(sqls, page_size=1024, chunk_size=131072)))
         db_bytes[32:36] = b'\x99\x00\x00\x00'
@@ -468,7 +492,7 @@ class TestStreamSqlite(unittest.TestCase):
 
     def test_expected_page_unprocessed(self):
         sqls = [
-            "CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);",
+            ("CREATE TABLE my_table_1 (my_text_col_a text, my_text_col_b text);", ()),
         ]
         db_bytes = bytearray(b''.join(db(sqls, page_size=1024, chunk_size=131072)))
         db_bytes[32:36] = b'\x99\x00\x00\x00'
@@ -532,8 +556,8 @@ def db(sqls, page_size, chunk_size):
         with sqlite3.connect(fp.name, isolation_level=None) as con:
             cur = con.cursor()
             cur.execute('PRAGMA page_size = {};'.format(page_size))
-            for sql in sqls:
-                cur.execute(sql)
+            for sql, bindings in sqls:
+                cur.execute(sql, bindings)
 
         with open(fp.name, 'rb') as f:
             while True:
