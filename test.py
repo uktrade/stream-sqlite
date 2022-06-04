@@ -19,7 +19,7 @@ class TestStreamSqlite(unittest.TestCase):
             [1, 2, 3, 5, 7, 32, 131072],
         ):
             with self.subTest(page_size, chunk_size=chunk_size):
-                all_chunks = tables_list(stream_sqlite(db([('VACUUM;', ())], page_size, chunk_size), max_buffer_size=0))
+                all_chunks = tables_list(stream_sqlite(db([('VACUUM;', ())], page_size, chunk_size), max_buffer_size=page_size))
                 self.assertEqual([], all_chunks)
 
     def test_small_table(self):
@@ -33,7 +33,7 @@ class TestStreamSqlite(unittest.TestCase):
                     ("CREATE TABLE \"my_table_'2\" (my_text_col_a text, my_text_col_b text);", ()),
                     ("INSERT INTO \"my_table_'1\" VALUES ('some-text-a', 'some-text-b')", ()),
                 ]
-                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=0))
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=page_size))
                 self.assertEqual([(
                     "my_table_'1",
                     (
@@ -98,7 +98,7 @@ class TestStreamSqlite(unittest.TestCase):
                     ("INSERT INTO my_table_1 VALUES (0),(1),(2),(65536),(16777216),(4294967296),(1099511627776),(281474976710656),(72057594037927936)", ()),
                     ("INSERT INTO my_table_1 VALUES (0),(-1),(-2),(-65536),(-16777216),(-4294967296),(-1099511627776),(-281474976710656),(-72057594037927936)", ()),
                 ]
-                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=0))
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=page_size))
                 self.assertEqual([(
                     'my_table_1',
                     (
@@ -136,7 +136,7 @@ class TestStreamSqlite(unittest.TestCase):
                     ("INSERT INTO my_table_1 VALUES (0),(1),(2),(65536),(16777216),(4294967296),(1099511627776),(281474976710656),(72057594037927936)", ()),
                     ("INSERT INTO my_table_1 VALUES (-1),(-2),(-65536),(-16777216),(-4294967296),(-1099511627776),(-281474976710656),(-72057594037927936)", ()),
                 ]
-                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=0))
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=page_size))
                 self.assertEqual([(
                     'my_table_1',
                     (
@@ -173,7 +173,7 @@ class TestStreamSqlite(unittest.TestCase):
                     ("CREATE TABLE my_table_1 (my_col_a real);", ()),
                     ("INSERT INTO my_table_1 VALUES (0.5123), (-0.1)", ()),
                 ]
-                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=0))
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=page_size))
                 self.assertEqual([(
                     'my_table_1',
                     (
@@ -232,6 +232,31 @@ class TestStreamSqlite(unittest.TestCase):
                     [('some-text-a', 'some-text-b')],
                 ) for i in range(1, 101)], all_chunks)
 
+    def test_many_large_tables_intermingled_no_recursion_error(self):
+        # This test runs a particular risk of recursion error
+        blob = b'E' * 1000000
+
+        for page_size, chunk_size in itertools.product(
+            [512, 65536],
+            [131072],
+        ):
+            with self.subTest(page_size=page_size, chunk_size=chunk_size):
+                sqls = flatten((
+                    [
+                        ("CREATE TABLE my_table_{} (my_blob blob);".format(i), ()),
+                        ("INSERT INTO my_table_{} VALUES (?);".format(i), (blob,)),
+                    ]
+                    for i in range(1, 1001)
+                ))
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=1000000000))
+                self.assertEqual([(
+                    'my_table_{}'.format(i),
+                    (
+                        column_constructor(cid=0, name='my_blob', type='blob', notnull=0, dflt_value=None, pk=0),
+                    ),
+                    [(blob,)],
+                ) for i in range(1, 1001)], all_chunks)
+
     def test_large_table(self):
         for page_size, chunk_size in itertools.product(
             [512, 1024, 4096, 8192, 16384, 32768, 65536],
@@ -243,7 +268,7 @@ class TestStreamSqlite(unittest.TestCase):
                 ] + [
                     ("INSERT INTO my_table_1 VALUES ('some-text-a', 'some-text-b')", ()),
                 ] * 1000
-                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=0))
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=page_size))
 
                 self.assertEqual(
                     [('some-text-a', 'some-text-b') for i in range (1, 1001)],
@@ -264,7 +289,7 @@ class TestStreamSqlite(unittest.TestCase):
                     ] +
                     [("CREATE INDEX my_index ON my_table_1(my_col_a);", ())]
                 )
-                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=0))
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=page_size))
                 self.assertEqual([(
                     "my_table_1",
                     (
