@@ -143,13 +143,15 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
             yield page_num, page_bytes, page_reader
 
     def yield_table_rows(page_nums_pages_readers, first_freelist_trunk_page):
-        # Map of page number -> bytes. Populated when we reach a page that
-        # can't be identified and so can't be processed.
+
+        # Map of page number -> bytes
         page_buffer = {}
 
-        # Map of page number -> page processor function. Populated when we
-        # identify a page, but don't have it in the buffer yet.
+        # Map of page number -> page processor function
         page_processors = {}
+
+        # List of page numbers that we might now be able to process
+        page_numbers_to_attempt_to_process = []
 
         # Bytes currently in the page_buffer, and all of the deques that store
         # overflow pages in the partially applied page_processors
@@ -179,7 +181,7 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                 payload_chunks.append(initial_payload)
                 payload_remainder = full_payload_size - initial_payload_size
 
-                yield from process_if_buffered_or_remember(partial(
+                remember_to_process(partial(
                     process_overflow_page,
                     full_payload_processor, payload_chunks, payload_remainder
                 ), overflow_page)
@@ -197,7 +199,7 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                 yield from full_payload_processor(*get_chunk_readers(payload))
 
             else:
-                yield from process_if_buffered_or_remember(partial(
+                remember_to_process(partial(
                     process_overflow_page,
                     full_payload_processor, payload_chunks, payload_remainder
                 ), next_overflow_page)
@@ -264,10 +266,13 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
 
                 def process_master_leaf_row(rowid, cell_num_reader, cell_varint_reader):
                     master_row = read_table_row(rowid, cell_num_reader, cell_varint_reader)
-                    yield from \
-                        process_if_buffered_or_remember(partial(process_table_page, master_row.name, *table_info_and_row_constructor(cur, master_row)), master_row.rootpage) if master_row.type == 'table' else \
-                        process_if_buffered_or_remember(process_index_page, master_row.rootpage) if master_row.type == 'index' else \
-                        ()
+                    if master_row.type == 'table':
+                        remember_to_process(partial(process_table_page, master_row.name, *table_info_and_row_constructor(cur, master_row)), master_row.rootpage)
+                    if master_row.type == 'index':
+                        remember_to_process(process_index_page, master_row.rootpage)
+
+                    # To make this a generator
+                    yield from ()
 
                 _, num_cells, _, _ = leaf_header.unpack(page_reader(7))
 
@@ -315,16 +320,18 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                 for pointer, in pointers:
                     cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
                     page_number, =  unsigned_long.unpack(cell_num_reader(4))
-                    yield from process_if_buffered_or_remember(
+                    remember_to_process(
                         partial(process_table_page, table_name, table_info, row_constructor), page_number)
 
-                yield from process_if_buffered_or_remember(
+                remember_to_process(
                     partial(process_table_page, table_name, table_info, row_constructor), right_most_pointer)
 
             page_type = page_reader(1)
-            yield from \
-                process_table_leaf_master() if page_type == LEAF_TABLE and table_name == 'sqlite_schema' else \
-                process_table_leaf_non_master() if page_type == LEAF_TABLE else \
+            if page_type == LEAF_TABLE and table_name == 'sqlite_schema':
+                yield from process_table_leaf_master()
+            elif page_type == LEAF_TABLE:
+                yield from process_table_leaf_non_master()
+            else:
                 process_table_interior()
 
         def process_index_page(page_bytes, page_reader):
@@ -372,7 +379,7 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                 for pointer, in pointers:
                     cell_num_reader, cell_varint_reader = get_chunk_readers(page_bytes, pointer)
                     page_num, =  unsigned_long.unpack(cell_num_reader(4))
-                    yield from process_if_buffered_or_remember(process_index_page, page_num)
+                    remember_to_process(process_index_page, page_num)
 
                     full_payload_size, _ = cell_varint_reader()
                     initial_payload_size = get_index_initial_payload_size(full_payload_size)
@@ -381,7 +388,7 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                         cell_num_reader, cell_varint_reader,
                     )
 
-                yield from process_if_buffered_or_remember(process_index_page, right_most_pointer)
+                remember_to_process(process_index_page, right_most_pointer)
 
             page_type = page_reader(1)
             yield from \
@@ -393,22 +400,19 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
             leaf_pages = unsigned_long.iter_unpack(page_reader(num_leaves * 4))
 
             for page_num, in leaf_pages:
-                yield from process_if_buffered_or_remember(process_freelist_leaf_page, page_num)
+                remember_to_process(process_freelist_leaf_page, page_num)
 
             if next_trunk != 0:
-                yield from process_if_buffered_or_remember(process_freelist_trunk_page, next_trunk)
+                remember_to_process(process_freelist_trunk_page, next_trunk)
+
+            yield from ()  # To make a generator
 
         def process_freelist_leaf_page(page_bytes, page_reader):
             yield from ()
 
-        def process_if_buffered_or_remember(process, page_num):
-            try:
-                page_bytes, page_reader = page_buffer.pop(page_num)
-            except KeyError:
-                page_processors[page_num] = process
-            else:
-                note_decrease_buffered(len(page_bytes))
-                yield from process(page_bytes, page_reader)
+        def remember_to_process(process, page_num):
+            page_numbers_to_attempt_to_process.append(page_num)
+            page_processors[page_num] = process
 
         page_processors[1] = partial(process_table_page, 'sqlite_schema', (), master_row_constructor)
 
@@ -416,13 +420,24 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
             page_processors[first_freelist_trunk_page] = process_freelist_trunk_page
 
         for page_num, page_bytes, page_reader in page_nums_pages_readers:
-            try:
-                process_page = page_processors.pop(page_num)
-            except KeyError:
-                note_increase_buffered(len(page_bytes))
-                page_buffer[page_num] = (page_bytes, page_reader)
-            else:
-                yield from process_page(page_bytes, page_reader)
+            note_increase_buffered(len(page_bytes))
+            page_buffer[page_num] = (page_bytes, page_reader)
+
+            page_numbers_to_attempt_to_process = [page_num]
+
+            while page_numbers_to_attempt_to_process:
+                _page_numbers_to_attempt_to_process = page_numbers_to_attempt_to_process.copy()
+                page_numbers_to_attempt_to_process = []
+
+                for page_num in _page_numbers_to_attempt_to_process:
+                    if page_num not in page_buffer or page_num not in page_processors:
+                        continue
+
+                    note_decrease_buffered(len(page_bytes))
+                    page_bytes, page_reader = page_buffer.pop(page_num)
+                    process_page = page_processors.pop(page_num)
+
+                    yield from process_page(page_bytes, page_reader)
 
         if num_bytes_buffered != 0:
             raise ValueError('Bytes remain in cache')
