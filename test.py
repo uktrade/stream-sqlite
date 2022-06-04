@@ -186,24 +186,26 @@ class TestStreamSqlite(unittest.TestCase):
                 )], all_chunks)
 
     def test_blobs(self):
+        small_blob = b'Something'
+        big_blob = b'E' * 99999999  # Can't be much bigger on CircleCI
         for page_size, chunk_size in itertools.product(
-            [512, 1024, 4096, 8192, 16384, 32768, 65536],
-            [1, 2, 3, 5, 7, 32, 131072],
+            [512, 65536,],
+            [131072,],
         ):
             with self.subTest(page_size=page_size, chunk_size=chunk_size):
                 sqls = [
                     ("CREATE TABLE my_table_1 (my_col_a blob);", ()),
-                    ("INSERT INTO my_table_1 VALUES (?), (?)", (b'Something', b'Else' * 10000)),
+                    ("INSERT INTO my_table_1 VALUES (?), (?)", (b'Something', big_blob)),
                 ]
-                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=1048576))
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=1048576000))
                 self.assertEqual([(
                     'my_table_1',
                     (
                         column_constructor(cid=0, name='my_col_a', type='blob', notnull=0, dflt_value=None, pk=0),
                     ),
                     [
-                        (b'Something',),
-                        (b'Else' * 10000,),
+                        (small_blob,),
+                        (big_blob,),
                     ]
                 )], all_chunks)
 
