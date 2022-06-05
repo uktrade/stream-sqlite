@@ -426,8 +426,7 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
             page_numbers_to_attempt_to_process = [page_num]
 
             while page_numbers_to_attempt_to_process:
-                _page_numbers_to_attempt_to_process = page_numbers_to_attempt_to_process.copy()
-                page_numbers_to_attempt_to_process = []
+                page_numbers_to_attempt_to_process, _page_numbers_to_attempt_to_process = [], page_numbers_to_attempt_to_process
 
                 for page_num in _page_numbers_to_attempt_to_process:
                     if page_num not in page_buffer or page_num not in page_processors:
