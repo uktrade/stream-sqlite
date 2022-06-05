@@ -151,7 +151,7 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
         page_processors = {}
 
         # List of page numbers that we might now be able to process
-        page_numbers_to_attempt_to_process = []
+        page_numbers_to_attempt_to_process = deque()
 
         # Bytes currently in the page_buffer, and all of the deques that store
         # overflow pages in the partially applied page_processors
@@ -423,10 +423,10 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
             note_increase_buffered(len(page_bytes))
             page_buffer[page_num] = (page_bytes, page_reader)
 
-            page_numbers_to_attempt_to_process = [page_num]
+            page_numbers_to_attempt_to_process.append(page_num)
 
             while page_numbers_to_attempt_to_process:
-                page_numbers_to_attempt_to_process, _page_numbers_to_attempt_to_process = [], page_numbers_to_attempt_to_process
+                page_numbers_to_attempt_to_process, _page_numbers_to_attempt_to_process = deque(), page_numbers_to_attempt_to_process
 
                 for page_num in _page_numbers_to_attempt_to_process:
                     if page_num not in page_buffer or page_num not in page_processors:
