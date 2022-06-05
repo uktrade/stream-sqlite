@@ -144,14 +144,14 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
 
     def yield_table_rows(page_nums_pages_readers, first_freelist_trunk_page):
 
-        # Map of page number -> bytes
+        # Map of page number -> bytes to process once we know how
         page_buffer = {}
 
-        # Map of page number -> page processor function
+        # Map of page number -> page processor functions to process once we have the data
         page_processors = {}
 
-        # List of page numbers that we might now be able to process
-        page_numbers_to_attempt_to_process = deque()
+        # Processor functions with matching page data we can process now
+        page_processors_with_bytes = deque()
 
         # Bytes currently in the page_buffer, and all of the deques that store
         # overflow pages in the partially applied page_processors
@@ -411,8 +411,12 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
             yield from ()
 
         def remember_to_process(process, page_num):
-            page_numbers_to_attempt_to_process.append(page_num)
-            page_processors[page_num] = process
+            try:
+                page_bytes, page_reader = page_buffer.pop(page_num)
+            except KeyError:
+                page_processors[page_num] = process
+            else:
+                page_processors_with_bytes.append((process, page_bytes, page_reader))
 
         page_processors[1] = partial(process_table_page, 'sqlite_schema', (), master_row_constructor)
 
@@ -421,21 +425,20 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
 
         for page_num, page_bytes, page_reader in page_nums_pages_readers:
             note_increase_buffered(len(page_bytes))
-            page_buffer[page_num] = (page_bytes, page_reader)
 
-            page_numbers_to_attempt_to_process.append(page_num)
+            try:
+                process_page = page_processors.pop(page_num)
+            except KeyError:
+                page_buffer[page_num] = (page_bytes, page_reader)
+                continue
 
-            while page_numbers_to_attempt_to_process:
-                page_numbers_to_attempt_to_process, _page_numbers_to_attempt_to_process = deque(), page_numbers_to_attempt_to_process
+            page_processors_with_bytes.append((process_page, page_bytes, page_reader))
 
-                for page_num in _page_numbers_to_attempt_to_process:
-                    if page_num not in page_buffer or page_num not in page_processors:
-                        continue
+            while page_processors_with_bytes:
+                page_processors_with_bytes, _page_processors_with_bytes = deque(), page_processors_with_bytes
 
+                for process_page, page_bytes, page_reader in _page_processors_with_bytes:
                     note_decrease_buffered(len(page_bytes))
-                    page_bytes, page_reader = page_buffer.pop(page_num)
-                    process_page = page_processors.pop(page_num)
-
                     yield from process_page(page_bytes, page_reader)
 
         if num_bytes_buffered != 0:
