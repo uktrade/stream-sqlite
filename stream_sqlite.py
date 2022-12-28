@@ -257,10 +257,17 @@ def stream_sqlite(sqlite_chunks, max_buffer_size):
                     cur.execute(sql)
                     cur.execute("PRAGMA table_info('" + name.replace("'","''") + "');")
                     columns = tuple(column_constructor(*column) for column in cur.fetchall())
+
+                    cur.execute("SELECT " + ','.join(column.dflt_value if column.dflt_value is not None else "NULL" for column in columns))
+                    default_values, = cur.fetchall()
+
                     integer_primary_key_indexes = tuple(i for i, column in enumerate(columns) if column.pk and column.type.lower() == 'integer')
                     rowid_alias_index = integer_primary_key_indexes[0] if len(integer_primary_key_indexes) == 1 else None
                     row_namedtuple = namedtuple('Row', tuple(column.name for column in columns))
-                    row_constructor = lambda rowid, *values: row_namedtuple(*tuple((rowid if i == rowid_alias_index else value) for i, value in enumerate(values)))
+                    row_constructor = lambda rowid, *values: row_namedtuple(*(
+                        tuple((rowid if i == rowid_alias_index else value) for i, value in enumerate(values))) +
+                        tuple(default_value for default_value in default_values[len(values):])
+                    )
 
                     return columns, row_constructor
 

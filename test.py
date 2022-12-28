@@ -374,6 +374,60 @@ class TestStreamSqlite(unittest.TestCase):
                     ],
                 )], all_chunks)
 
+    def test_alter_table_integer(self):
+        for page_size, chunk_size in itertools.product(
+            [512, 1024, 4096, 8192, 16384, 32768, 65536],
+            [1, 2, 3, 5, 7, 32, 131072],
+        ):
+            with self.subTest(page_size=page_size, chunk_size=chunk_size):
+                sqls = (
+                    [("CREATE TABLE my_table_1 (my_col_a integer);", ())] +
+                    [
+                        ("INSERT INTO my_table_1 VALUES ({});".format(i), ())
+                        for i in range(0, 100)
+                    ] +
+                    [("ALTER TABLE my_table_1 ADD COLUMN my_col_b integer DEFAULT 10;", ())]
+                )
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=1048576))
+                self.assertEqual([(
+                    "my_table_1",
+                    (
+                        column_constructor(cid=0, name='my_col_a', type='integer', notnull=0, dflt_value=None, pk=0),
+                        column_constructor(cid=1, name='my_col_b', type='integer', notnull=0, dflt_value='10', pk=0),
+                    ),
+                    [
+                        (i, 10)
+                        for i in range(0, 100)
+                    ],
+                )], all_chunks)
+
+    def test_alter_table_text(self):
+        for page_size, chunk_size in itertools.product(
+            [512, 1024, 4096, 8192, 16384, 32768, 65536],
+            [1, 2, 3, 5, 7, 32, 131072],
+        ):
+            with self.subTest(page_size=page_size, chunk_size=chunk_size):
+                sqls = (
+                    [("CREATE TABLE my_table_1 (my_col_a integer);", ())] +
+                    [
+                        ("INSERT INTO my_table_1 VALUES ({});".format(i), ())
+                        for i in range(0, 100)
+                    ] +
+                    [("ALTER TABLE my_table_1 ADD COLUMN my_col_b integer DEFAULT '10';", ())]
+                )
+                all_chunks = tables_list(stream_sqlite(db(sqls, page_size, chunk_size), max_buffer_size=1048576))
+                self.assertEqual([(
+                    "my_table_1",
+                    (
+                        column_constructor(cid=0, name='my_col_a', type='integer', notnull=0, dflt_value=None, pk=0),
+                        column_constructor(cid=1, name='my_col_b', type='integer', notnull=0, dflt_value="'10'", pk=0),
+                    ),
+                    [
+                        (i, '10')
+                        for i in range(0, 100)
+                    ],
+                )], all_chunks)
+
     def test_analyze(self):
         for page_size, chunk_size in itertools.product(
             [65536],
